@@ -1,0 +1,63 @@
+{"step": 1, "agent": "hpa", "message": "[HPA] held pod count; SLO VIOLATION (167ms)", "cpu_util": 0.511, "latency_ms": 167.2, "slo_violation": true, "blocked": false, "cost": 7.5, "tier": 1, "active_pods": 3}
+{"step": 2, "agent": "hpa", "message": "[HPA] held pod count; SLO VIOLATION (229ms)", "cpu_util": 0.582, "latency_ms": 229.4, "slo_violation": true, "blocked": false, "cost": 7.5, "tier": 1, "active_pods": 3}
+{"step": 3, "agent": "hpa", "message": "[HPA] held pod count; SLO VIOLATION (212ms)", "cpu_util": 0.566, "latency_ms": 212.1, "slo_violation": true, "blocked": false, "cost": 7.5, "tier": 1, "active_pods": 3}
+{"step": 4, "agent": "hpa", "message": "[HPA] held pod count; SLO VIOLATION (267ms)", "cpu_util": 0.613, "latency_ms": 267.0, "slo_violation": true, "blocked": false, "cost": 7.5, "tier": 1, "active_pods": 3}
+{"step": 5, "agent": "hpa", "message": "[HPA] held pod count; SLO VIOLATION (208ms)", "cpu_util": 0.562, "latency_ms": 208.5, "slo_violation": true, "blocked": false, "cost": 7.5, "tier": 1, "active_pods": 3}
+{"step": 6, "agent": "hpa", "message": "[HPA] held pod count; SLO VIOLATION (204ms)", "cpu_util": 0.558, "latency_ms": 204.5, "slo_violation": true, "blocked": false, "cost": 7.5, "tier": 1, "active_pods": 3}
+{"step": 7, "agent": "hpa", "message": "[HPA] held pod count; SLO VIOLATION (174ms)", "cpu_util": 0.521, "latency_ms": 174.5, "slo_violation": true, "blocked": false, "cost": 7.5, "tier": 1, "active_pods": 3}
+{"step": 8, "agent": "hpa", "message": "[HPA] held pod count; SLO VIOLATION (233ms)", "cpu_util": 0.586, "latency_ms": 233.3, "slo_violation": true, "blocked": false, "cost": 7.5, "tier": 1, "active_pods": 3}
+{"step": 9, "agent": "hpa", "message": "[HPA] held pod count; SLO VIOLATION (224ms)", "cpu_util": 0.578, "latency_ms": 224.4, "slo_violation": true, "blocked": false, "cost": 7.5, "tier": 1, "active_pods": 3}
+{"step": 10, "agent": "hpa", "message": "[HPA] held pod count; SLO VIOLATION (255ms)", "cpu_util": 0.604, "latency_ms": 255.5, "slo_violation": true, "blocked": false, "cost": 7.5, "tier": 1, "active_pods": 3}
+{"step": 11, "agent": "hpa", "message": "[HPA] held pod count; SLO VIOLATION (237ms)", "cpu_util": 0.589, "latency_ms": 237.3, "slo_violation": true, "blocked": false, "cost": 7.5, "tier": 1, "active_pods": 3}
+{"step": 12, "agent": "hpa", "message": "[HPA] held pod count; SLO VIOLATION (263ms)", "cpu_util": 0.61, "latency_ms": 263.0, "slo_violation": true, "blocked": false, "cost": 7.5, "tier": 1, "active_pods": 3}
+{"step": 13, "agent": "hpa", "message": "[HPA] held pod count; SLO VIOLATION (204ms)", "cpu_util": 0.557, "latency_ms": 203.7, "slo_violation": true, "blocked": false, "cost": 7.5, "tier": 1, "active_pods": 3}
+{"step": 14, "agent": "hpa", "message": "[HPA] held pod count; SLO VIOLATION (271ms)", "cpu_util": 0.616, "latency_ms": 271.2, "slo_violation": true, "blocked": false, "cost": 7.5, "tier": 1, "active_pods": 3}
+{"step": 15, "agent": "hpa", "message": "[HPA] held pod count; SLO VIOLATION (151ms)", "cpu_util": 0.485, "latency_ms": 150.6, "slo_violation": true, "blocked": false, "cost": 7.5, "tier": 1, "active_pods": 3}
+{"step": 16, "agent": "hpa", "message": "[HPA] held pod count; SLO VIOLATION (231ms)", "cpu_util": 0.584, "latency_ms": 230.7, "slo_violation": true, "blocked": false, "cost": 7.5, "tier": 1, "active_pods": 3}
+{"step": 1, "agent": "ppo", "message": "[PPO] scaled up +2 pod(s) (3\u21925); SLO VIOLATION (271ms)", "cpu_util": 0.616, "latency_ms": 270.8, "slo_violation": true, "blocked": false, "cost": 12.5, "tier": 1, "active_pods": 3}
+{"step": 2, "agent": "ppo", "message": "[PPO] scaled up +2 pod(s) (5\u21927)", "cpu_util": 0.332, "latency_ms": 89.8, "slo_violation": false, "blocked": false, "cost": 17.5, "tier": 1, "active_pods": 5}
+{"step": 3, "agent": "ppo", "message": "[PPO] held pod count; SLO VIOLATION (154ms)", "cpu_util": 0.491, "latency_ms": 154.3, "slo_violation": true, "blocked": false, "cost": 9.1, "tier": 0, "active_pods": 7}
+{"step": 4, "agent": "ppo", "message": "[PPO] scaled up +2 pod(s) (7\u21929); tier change to medium blocked by tier cooldown", "cpu_util": 0.481, "latency_ms": 148.7, "slo_violation": false, "blocked": true, "cost": 11.7, "tier": 0, "active_pods": 7}
+{"step": 5, "agent": "ppo", "message": "[PPO] held pod count; tier change to medium blocked by tier cooldown", "cpu_util": 0.371, "latency_ms": 101.2, "slo_violation": false, "blocked": true, "cost": 11.7, "tier": 0, "active_pods": 9}
+{"step": 6, "agent": "ppo", "message": "[PPO] held pod count", "cpu_util": 0.357, "latency_ms": 96.6, "slo_violation": false, "blocked": false, "cost": 11.7, "tier": 0, "active_pods": 9}
+{"step": 7, "agent": "ppo", "message": "[PPO] held pod count", "cpu_util": 0.345, "latency_ms": 93.1, "slo_violation": false, "blocked": false, "cost": 11.7, "tier": 0, "active_pods": 9}
+{"step": 8, "agent": "ppo", "message": "[PPO] held pod count", "cpu_util": 0.358, "latency_ms": 97.0, "slo_violation": false, "blocked": false, "cost": 11.7, "tier": 0, "active_pods": 9}
+{"step": 9, "agent": "ppo", "message": "[PPO] held pod count", "cpu_util": 0.368, "latency_ms": 100.1, "slo_violation": false, "blocked": false, "cost": 11.7, "tier": 0, "active_pods": 9}
+{"step": 10, "agent": "ppo", "message": "[PPO] held pod count", "cpu_util": 0.375, "latency_ms": 102.4, "slo_violation": false, "blocked": false, "cost": 11.7, "tier": 0, "active_pods": 9}
+{"step": 11, "agent": "ppo", "message": "[PPO] held pod count", "cpu_util": 0.344, "latency_ms": 93.0, "slo_violation": false, "blocked": false, "cost": 11.7, "tier": 0, "active_pods": 9}
+{"step": 12, "agent": "ppo", "message": "[PPO] held pod count", "cpu_util": 0.375, "latency_ms": 102.4, "slo_violation": false, "blocked": false, "cost": 11.7, "tier": 0, "active_pods": 9}
+{"step": 13, "agent": "ppo", "message": "[PPO] held pod count", "cpu_util": 0.343, "latency_ms": 92.5, "slo_violation": false, "blocked": false, "cost": 11.7, "tier": 0, "active_pods": 9}
+{"step": 14, "agent": "ppo", "message": "[PPO] held pod count", "cpu_util": 0.367, "latency_ms": 99.7, "slo_violation": false, "blocked": false, "cost": 11.7, "tier": 0, "active_pods": 9}
+{"step": 15, "agent": "ppo", "message": "[PPO] held pod count", "cpu_util": 0.384, "latency_ms": 105.3, "slo_violation": false, "blocked": false, "cost": 11.7, "tier": 0, "active_pods": 9}
+{"step": 16, "agent": "ppo", "message": "[PPO] held pod count", "cpu_util": 0.348, "latency_ms": 94.0, "slo_violation": false, "blocked": false, "cost": 11.7, "tier": 0, "active_pods": 9}
+{"step": 17, "agent": "ppo", "message": "[PPO] held pod count", "cpu_util": 0.359, "latency_ms": 97.5, "slo_violation": false, "blocked": false, "cost": 11.7, "tier": 0, "active_pods": 9}
+{"step": 18, "agent": "ppo", "message": "[PPO] held pod count", "cpu_util": 0.395, "latency_ms": 109.4, "slo_violation": false, "blocked": false, "cost": 11.7, "tier": 0, "active_pods": 9}
+{"step": 19, "agent": "ppo", "message": "[PPO] held pod count", "cpu_util": 0.365, "latency_ms": 99.3, "slo_violation": false, "blocked": false, "cost": 11.7, "tier": 0, "active_pods": 9}
+{"step": 20, "agent": "ppo", "message": "[PPO] held pod count", "cpu_util": 0.376, "latency_ms": 102.9, "slo_violation": false, "blocked": false, "cost": 11.7, "tier": 0, "active_pods": 9}
+{"step": 21, "agent": "ppo", "message": "[PPO] held pod count", "cpu_util": 0.352, "latency_ms": 95.2, "slo_violation": false, "blocked": false, "cost": 11.7, "tier": 0, "active_pods": 9}
+{"step": 22, "agent": "ppo", "message": "[PPO] held pod count", "cpu_util": 0.38, "latency_ms": 103.9, "slo_violation": false, "blocked": false, "cost": 11.7, "tier": 0, "active_pods": 9}
+{"step": 23, "agent": "ppo", "message": "[PPO] held pod count", "cpu_util": 0.39, "latency_ms": 107.4, "slo_violation": false, "blocked": false, "cost": 11.7, "tier": 0, "active_pods": 9}
+{"step": 24, "agent": "ppo", "message": "[PPO] held pod count", "cpu_util": 0.353, "latency_ms": 95.5, "slo_violation": false, "blocked": false, "cost": 11.7, "tier": 0, "active_pods": 9}
+{"step": 25, "agent": "ppo", "message": "[PPO] held pod count", "cpu_util": 0.391, "latency_ms": 107.8, "slo_violation": false, "blocked": false, "cost": 11.7, "tier": 0, "active_pods": 9}
+{"step": 26, "agent": "ppo", "message": "[PPO] held pod count", "cpu_util": 0.385, "latency_ms": 105.6, "slo_violation": false, "blocked": false, "cost": 11.7, "tier": 0, "active_pods": 9}
+{"step": 27, "agent": "ppo", "message": "[PPO] held pod count", "cpu_util": 0.366, "latency_ms": 99.5, "slo_violation": false, "blocked": false, "cost": 11.7, "tier": 0, "active_pods": 9}
+{"step": 28, "agent": "ppo", "message": "[PPO] held pod count", "cpu_util": 0.395, "latency_ms": 109.3, "slo_violation": false, "blocked": false, "cost": 11.7, "tier": 0, "active_pods": 9}
+{"step": 29, "agent": "ppo", "message": "[PPO] held pod count", "cpu_util": 0.358, "latency_ms": 96.9, "slo_violation": false, "blocked": false, "cost": 11.7, "tier": 0, "active_pods": 9}
+{"step": 30, "agent": "ppo", "message": "[PPO] held pod count", "cpu_util": 0.331, "latency_ms": 89.4, "slo_violation": false, "blocked": false, "cost": 11.7, "tier": 0, "active_pods": 9}
+{"step": 31, "agent": "ppo", "message": "[PPO] held pod count", "cpu_util": 0.368, "latency_ms": 100.2, "slo_violation": false, "blocked": false, "cost": 11.7, "tier": 0, "active_pods": 9}
+{"step": 32, "agent": "ppo", "message": "[PPO] held pod count", "cpu_util": 0.343, "latency_ms": 92.7, "slo_violation": false, "blocked": false, "cost": 11.7, "tier": 0, "active_pods": 9}
+{"step": 33, "agent": "ppo", "message": "[PPO] held pod count", "cpu_util": 0.35, "latency_ms": 94.6, "slo_violation": false, "blocked": false, "cost": 11.7, "tier": 0, "active_pods": 9}
+{"step": 34, "agent": "ppo", "message": "[PPO] held pod count", "cpu_util": 0.392, "latency_ms": 108.3, "slo_violation": false, "blocked": false, "cost": 11.7, "tier": 0, "active_pods": 9}
+{"step": 35, "agent": "ppo", "message": "[PPO] held pod count", "cpu_util": 0.364, "latency_ms": 98.9, "slo_violation": false, "blocked": false, "cost": 11.7, "tier": 0, "active_pods": 9}
+{"step": 36, "agent": "ppo", "message": "[PPO] held pod count", "cpu_util": 0.351, "latency_ms": 94.9, "slo_violation": false, "blocked": false, "cost": 11.7, "tier": 0, "active_pods": 9}
+{"step": 37, "agent": "ppo", "message": "[PPO] held pod count", "cpu_util": 0.351, "latency_ms": 95.0, "slo_violation": false, "blocked": false, "cost": 11.7, "tier": 0, "active_pods": 9}
+{"step": 38, "agent": "ppo", "message": "[PPO] held pod count", "cpu_util": 0.339, "latency_ms": 91.6, "slo_violation": false, "blocked": false, "cost": 11.7, "tier": 0, "active_pods": 9}
+{"step": 39, "agent": "ppo", "message": "[PPO] held pod count", "cpu_util": 0.366, "latency_ms": 99.4, "slo_violation": false, "blocked": false, "cost": 11.7, "tier": 0, "active_pods": 9}
+{"step": 40, "agent": "ppo", "message": "[PPO] held pod count", "cpu_util": 0.408, "latency_ms": 113.9, "slo_violation": false, "blocked": false, "cost": 11.7, "tier": 0, "active_pods": 9}
+{"step": 41, "agent": "ppo", "message": "[PPO] held pod count", "cpu_util": 0.399, "latency_ms": 110.7, "slo_violation": false, "blocked": false, "cost": 11.7, "tier": 0, "active_pods": 9}
+{"step": 42, "agent": "ppo", "message": "[PPO] held pod count", "cpu_util": 0.339, "latency_ms": 91.6, "slo_violation": false, "blocked": false, "cost": 11.7, "tier": 0, "active_pods": 9}
+{"step": 43, "agent": "ppo", "message": "[PPO] held pod count", "cpu_util": 0.354, "latency_ms": 95.8, "slo_violation": false, "blocked": false, "cost": 11.7, "tier": 0, "active_pods": 9}
+{"step": 44, "agent": "ppo", "message": "[PPO] held pod count", "cpu_util": 0.387, "latency_ms": 106.6, "slo_violation": false, "blocked": false, "cost": 11.7, "tier": 0, "active_pods": 9}
+{"step": 45, "agent": "ppo", "message": "[PPO] held pod count", "cpu_util": 0.349, "latency_ms": 94.3, "slo_violation": false, "blocked": false, "cost": 11.7, "tier": 0, "active_pods": 9}
+{"step": 46, "agent": "ppo", "message": "[PPO] held pod count", "cpu_util": 0.352, "latency_ms": 95.1, "slo_violation": false, "blocked": false, "cost": 11.7, "tier": 0, "active_pods": 9}
+{"step": 47, "agent": "ppo", "message": "[PPO] held pod count", "cpu_util": 0.364, "latency_ms": 99.0, "slo_violation": false, "blocked": false, "cost": 11.7, "tier": 0, "active_pods": 9}

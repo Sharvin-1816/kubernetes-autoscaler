@@ -1,0 +1,6 @@
+pattern,seen_during_training,ppo_cost,hpa_cost,cost_improvement_pct,ppo_slo_violation_pct,hpa_slo_violation_pct,slo_improvement_pct
+diurnal,True,3129.3,2516.5,-24.4,16.7,47.2,64.6
+noisy_steady,True,3249.1,2160.0,-50.4,9.0,78.5,88.5
+spike,False,3911.8,3826.2,-2.2,24.4,55.8,56.2
+ramp,False,4965.1,4638.5,-7.0,80.5,97.9,17.8
+mixed,False,3961.4,4106.8,3.5,44.2,53.1,16.7

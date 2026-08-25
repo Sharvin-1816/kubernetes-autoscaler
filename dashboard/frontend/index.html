@@ -1,0 +1,420 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Autoscaler Control Room — K8s RL Simulation</title>
+
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<script>
+  tailwind.config = {
+    darkMode: 'class',
+    theme: { extend: { fontFamily: {
+      sans: ['Space Grotesk', 'sans-serif'],
+      mono: ['IBM Plex Mono', 'monospace'],
+    } } }
+  }
+</script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
+  body {
+    background: #060913;
+    background-image: radial-gradient(at 20% 10%, rgba(53,208,186,0.06) 0px, transparent 50%),
+                       radial-gradient(at 80% 80%, rgba(139,124,246,0.05) 0px, transparent 50%);
+    background-attachment: fixed;
+  }
+  .glass { background: rgba(15,23,42,0.7); backdrop-filter: blur(10px); border: 1px solid rgba(255,255,255,0.06); }
+  .hex-pod { transition: transform .2s, filter .2s; cursor: pointer; }
+  .hex-pod:hover { transform: translateY(-2px); filter: drop-shadow(0 0 10px rgba(53,208,186,0.4)); }
+  .pending-pulse { animation: pendingPulse 1.4s ease-in-out infinite; }
+  @keyframes pendingPulse { 0%,100% { opacity: .35 } 50% { opacity: .9 } }
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-thumb { background: #1f2a44; border-radius: 4px; }
+</style>
+</head>
+<body class="min-h-screen text-slate-100 font-sans">
+<div id="root"></div>
+
+<script type="text/babel">
+const { useState, useEffect, useRef, useCallback } = React;
+
+const TIER_COLORS = { small: "#35D0BA", medium: "#5B7FDE", large: "#8B7CF6" };
+const TIER_NAMES = ["small", "medium", "large"];
+
+function HexPod({ pod, onClick }) {
+  const isPending = pod.status === "pending";
+  const color = TIER_COLORS[pod.tier] || TIER_COLORS.small;
+  const util = pod.cpu_util || 0;
+  const violated = util > 1.0;
+  const warn = util > 0.75;
+  const width = pod.tier === "large" ? 118 : pod.tier === "medium" ? 102 : 90;
+
+  let strokeColor = color;
+  if (!isPending) {
+    if (violated) strokeColor = "#FF5A5F";
+    else if (warn) strokeColor = "#F5A623";
+  }
+
+  return (
+    <div className="hex-pod flex flex-col items-center" onClick={onClick} title={pod.id}>
+      <svg width={width} height={width * 1.1} viewBox="0 0 84 92">
+        <polygon points="42,2 80,23 80,69 42,90 4,69 4,23"
+          fill={strokeColor} fillOpacity={isPending ? 0.06 : 0.16}
+          stroke={strokeColor} strokeWidth="2.5"
+          strokeDasharray={isPending ? "5 4" : "none"}
+          className={isPending ? "pending-pulse" : ""} />
+        {!isPending && (
+          <g textAnchor="middle" fontFamily="IBM Plex Mono">
+            <text x="42" y="38" fill="#F1F5F9" fontSize="13" fontWeight="700">{pod.id}</text>
+            <text x="42" y="56" fill="#94A3B8" fontSize="12">{Math.round(util * 100)}%</text>
+          </g>
+        )}
+      </svg>
+      <div
+        className="-mt-3 rounded-b-md flex items-center justify-center gap-1.5 py-1.5 text-[10px] font-mono text-slate-300"
+        style={{ background: `${strokeColor}22`, borderTop: `1px solid ${strokeColor}55`, width }}
+      >
+        <span className="w-1.5 h-1.5 rounded-full" style={{ background: strokeColor }}></span>
+        {pod.tier}
+      </div>
+    </div>
+  );
+}
+
+function PodModal({ pod, tierInfo, onClose }) {
+  if (!pod) return null;
+  const info = tierInfo[pod.tier] || {};
+  return (
+    <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4" onClick={onClose}>
+      <div className="glass rounded-2xl max-w-sm w-full p-6" onClick={(e) => e.stopPropagation()}>
+        <div className="flex justify-between items-start mb-4">
+          <div>
+            <h3 className="font-mono text-lg font-semibold">{pod.id}</h3>
+            <span className={`text-xs font-mono uppercase ${pod.status === "active" ? "text-teal-400" : "text-amber-400"}`}>
+              {pod.status}
+            </span>
+          </div>
+          <button onClick={onClose} className="text-slate-400 hover:text-white text-xl leading-none">&times;</button>
+        </div>
+        <div className="space-y-2 font-mono text-sm">
+          <Row label="Tier" value={pod.tier} />
+          <Row label="Capacity" value={`${info.capacity ?? "—"} req/s`} />
+          <Row label="Cost / step" value={`$${info.cost_per_step ?? "—"}`} />
+          <Row label="Age" value={`${pod.age_steps} steps`} />
+          <Row label="Cluster CPU util" value={`${Math.round((pod.cpu_util||0)*100)}%`} />
+        </div>
+        <p className="text-[11px] text-slate-500 mt-4 leading-relaxed">
+          CPU utilization reflects the whole cluster's current load — this simulation
+          models capacity uniformly across pods of a tier rather than per-pod
+          load-balancing variance, so every pod in the cluster shows the same value.
+        </p>
+      </div>
+    </div>
+  );
+}
+
+function Row({ label, value }) {
+  return (
+    <div className="flex justify-between border-b border-white/5 py-1.5">
+      <span className="text-slate-400">{label}</span>
+      <span className="text-slate-100 capitalize">{value}</span>
+    </div>
+  );
+}
+
+function StatCard({ label, value, unit, accent, highlight }) {
+  return (
+    <div className={`glass rounded-xl p-3.5 flex flex-col gap-1 ${highlight ? "border-red-500/50 bg-red-950/20" : ""}`}>
+      <span className="text-[10px] uppercase tracking-wide text-slate-400">{label}</span>
+      <span className="font-mono text-xl font-medium" style={accent ? { color: accent } : {}}>
+        {value}{unit && <small className="text-slate-500 text-xs ml-1">{unit}</small>}
+      </span>
+    </div>
+  );
+}
+
+function LogFeed({ logs }) {
+  const reversed = [...logs].reverse();
+  return (
+    <div className="space-y-1.5 max-h-[340px] overflow-y-auto pr-1">
+      {reversed.length === 0 && <div className="text-xs text-slate-500 font-mono">No decisions yet — press play.</div>}
+      {reversed.map((log, i) => (
+        <div key={i} className={`rounded-lg px-3 py-2 text-[11px] font-mono border ${
+          log.slo_violation ? "border-red-500/30 bg-red-950/20 text-red-300"
+          : log.blocked ? "border-amber-500/30 bg-amber-950/10 text-amber-300"
+          : "border-white/5 bg-white/[0.02] text-slate-300"
+        }`}>
+          <span className="text-slate-500 mr-2">S{log.step}</span>{log.message}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function App() {
+  const [patterns, setPatterns] = useState({ train: [], eval_only: [] });
+  const [pattern, setPattern] = useState("spike");
+  const [agent, setAgent] = useState("hpa");
+  const [speed, setSpeed] = useState(2.0);
+  const [state, setState] = useState(null);
+  const [tierInfo, setTierInfo] = useState({});
+  const [selectedPod, setSelectedPod] = useState(null);
+  const [training, setTraining] = useState({ running: false, timesteps_done: 0, total_timesteps: 200000, latest_reward: null, reward_history: [], error: null });
+  const [timesteps, setTimesteps] = useState(200000);
+
+  const wsRef = useRef(null);
+  const lastStepRef = useRef(-1);
+  const tlChartRef = useRef(null);
+  const tlChartInstance = useRef(null);
+  const rewardChartRef = useRef(null);
+  const rewardChartInstance = useRef(null);
+  const historyRef = useRef({ labels: [], traffic: [], latency: [] });
+
+  useEffect(() => {
+    fetch("/api/patterns").then(r => r.json()).then(d =>
+      setPatterns({ train: d.train_patterns, eval_only: d.eval_only_patterns }));
+    fetch("/api/tier_info").then(r => r.json()).then(setTierInfo);
+  }, []);
+
+  useEffect(() => {
+    function connect() {
+      const ws = new WebSocket(`ws://${location.host}/ws/simulation`);
+      ws.onmessage = (evt) => {
+        const s = JSON.parse(evt.data);
+        if (s.step < lastStepRef.current) {
+          historyRef.current = { labels: [], traffic: [], latency: [] };
+        }
+        lastStepRef.current = s.step;
+        historyRef.current.labels.push(s.step);
+        historyRef.current.traffic.push(s.request_rate);
+        historyRef.current.latency.push(s.latency_ms);
+        if (historyRef.current.labels.length > 288) {
+          historyRef.current.labels.shift();
+          historyRef.current.traffic.shift();
+          historyRef.current.latency.shift();
+        }
+        setState(s);
+        if (tlChartInstance.current) {
+          tlChartInstance.current.data.labels = historyRef.current.labels;
+          tlChartInstance.current.data.datasets[0].data = historyRef.current.traffic;
+          tlChartInstance.current.data.datasets[1].data = historyRef.current.latency;
+          tlChartInstance.current.update("none");
+        }
+      };
+      ws.onclose = () => setTimeout(connect, 1500);
+      wsRef.current = ws;
+    }
+    connect();
+    return () => wsRef.current && wsRef.current.close();
+  }, []);
+
+  useEffect(() => {
+    const ctx = tlChartRef.current.getContext("2d");
+    tlChartInstance.current = new Chart(ctx, {
+      type: "line",
+      data: { labels: [], datasets: [
+        { label: "Traffic (req/s)", data: [], borderColor: "#5B7FDE", backgroundColor: "rgba(91,127,222,0.08)", yAxisID: "y", tension: .25, pointRadius: 0, borderWidth: 2 },
+        { label: "Latency (ms)", data: [], borderColor: "#FF5A5F", backgroundColor: "rgba(255,90,95,0.08)", yAxisID: "y1", tension: .25, pointRadius: 0, borderWidth: 2 },
+      ]},
+      options: { responsive: true, animation: false, interaction: { mode: "index", intersect: false },
+        scales: {
+          x: { ticks: { color: "#7C8AA5", font: { size: 10 } }, grid: { color: "#1F2A44" } },
+          y: { position: "left", ticks: { color: "#7C8AA5", font: { size: 10 } }, grid: { color: "#1F2A44" } },
+          y1: { position: "right", ticks: { color: "#7C8AA5", font: { size: 10 } }, grid: { display: false } },
+        },
+        plugins: { legend: { labels: { color: "#E6EDF5", font: { size: 11 } } } } }
+    });
+
+    const rctx = rewardChartRef.current.getContext("2d");
+    rewardChartInstance.current = new Chart(rctx, {
+      type: "line",
+      data: { labels: [], datasets: [
+        { label: "Mean episode reward", data: [], borderColor: "#8B7CF6", backgroundColor: "rgba(139,124,246,0.08)", tension: .2, pointRadius: 0, borderWidth: 2 },
+      ]},
+      options: { responsive: true, animation: false,
+        scales: {
+          x: { ticks: { color: "#7C8AA5", font: { size: 10 } }, grid: { color: "#1F2A44" } },
+          y: { ticks: { color: "#7C8AA5", font: { size: 10 } }, grid: { color: "#1F2A44" } },
+        },
+        plugins: { legend: { labels: { color: "#E6EDF5", font: { size: 11 } } } } }
+    });
+  }, []);
+
+  useEffect(() => {
+    const interval = setInterval(async () => {
+      const res = await fetch("/api/training/status");
+      const d = await res.json();
+      setTraining(d);
+      if (rewardChartInstance.current) {
+        rewardChartInstance.current.data.labels = d.reward_history.map(p => p.timestep);
+        rewardChartInstance.current.data.datasets[0].data = d.reward_history.map(p => p.reward);
+        rewardChartInstance.current.update("none");
+      }
+    }, 1000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const applyConfig = useCallback(async (nextPattern, nextAgent) => {
+    const res = await fetch("/api/simulation/config", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ pattern: nextPattern, agent: nextAgent }),
+    });
+    const d = await res.json();
+    if (d.status === "error") { alert(d.message); setAgent("hpa"); }
+  }, []);
+
+  useEffect(() => { applyConfig(pattern, agent); }, [pattern, agent]);
+
+  const control = (action) => fetch("/api/simulation/control", {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action }),
+  });
+
+  const setSpeedRemote = (v) => {
+    setSpeed(v);
+    fetch("/api/simulation/speed", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ speed: v }) });
+  };
+
+  const startTraining = async () => {
+    await fetch("/api/training/start", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ total_timesteps: timesteps }) });
+  };
+  const stopTraining = () => fetch("/api/training/stop", { method: "POST" });
+
+  const s = state || {};
+  const pods = s.pods || [];
+  const logs = s.recent_logs || [];
+
+  return (
+    <div className="min-h-screen flex flex-col">
+      <header className="border-b border-white/5 bg-[#080d1a]/90 backdrop-blur-md sticky top-0 z-30 px-6 py-3.5">
+        <div className="max-w-[1500px] mx-auto flex flex-wrap items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <span className="text-2xl text-teal-400" style={{ textShadow: "0 0 14px rgba(53,208,186,.5)" }}>⬡</span>
+            <div>
+              <h1 className="font-semibold text-lg">Autoscaler Control Room</h1>
+              <p className="text-xs text-slate-400">RL-based Kubernetes pod autoscaling — live simulation</p>
+            </div>
+          </div>
+          <div className="flex flex-wrap items-end gap-4">
+            <Field label="Traffic pattern">
+              <select value={pattern} onChange={e => setPattern(e.target.value)} className="bg-[#121A2B] border border-white/10 rounded-lg px-3 py-1.5 text-xs font-mono">
+                {patterns.train.map(p => <option key={p} value={p}>{p} (seen)</option>)}
+                {patterns.eval_only.map(p => <option key={p} value={p}>{p} (unseen)</option>)}
+              </select>
+            </Field>
+            <Field label="Agent">
+              <select value={agent} onChange={e => setAgent(e.target.value)} className="bg-[#121A2B] border border-white/10 rounded-lg px-3 py-1.5 text-xs font-mono">
+                <option value="hpa">HPA Baseline</option>
+                <option value="ppo">PPO (RL)</option>
+              </select>
+            </Field>
+            <div className="flex gap-1.5 bg-[#121A2B] border border-white/10 rounded-lg p-1">
+              <button onClick={() => control("play")} disabled={s.playing} className="w-8 h-8 rounded bg-teal-500 text-[#08201C] font-bold disabled:opacity-30">▶</button>
+              <button onClick={() => control("pause")} disabled={!s.playing} className="w-8 h-8 rounded hover:bg-white/5 disabled:opacity-30">⏸</button>
+              <button onClick={() => control("step")} className="w-8 h-8 rounded hover:bg-white/5">⏭</button>
+              <button onClick={() => control("reset")} className="w-8 h-8 rounded hover:bg-white/5">↺</button>
+            </div>
+            <Field label={`Speed ${speed.toFixed(1)}x`}>
+              <input type="range" min="0.5" max="10" step="0.5" value={speed} onChange={e => setSpeedRemote(parseFloat(e.target.value))} className="w-28" />
+            </Field>
+          </div>
+        </div>
+      </header>
+
+      <main className="max-w-[1500px] w-full mx-auto p-6 grid grid-cols-1 lg:grid-cols-12 gap-5">
+
+        <section className="lg:col-span-7 glass rounded-2xl p-5">
+          <div className="flex justify-between items-baseline mb-3">
+            <h2 className="font-semibold">Cluster</h2>
+            <span className="text-xs text-slate-400 font-mono">
+              {s.active_pods ?? 0} active · {s.pending_pods ?? 0} spinning up · tier: {TIER_NAMES[s.tier ?? 1]}
+            </span>
+          </div>
+          <div className="min-h-[200px] flex flex-wrap gap-3 items-center py-4">
+            {pods.map(p => <HexPod key={p.id} pod={p} onClick={() => setSelectedPod(p)} />)}
+          </div>
+          <div className="flex gap-4 text-[11px] text-slate-400 font-mono pt-3 border-t border-white/5">
+            <Legend color={TIER_COLORS.small} label="small" />
+            <Legend color={TIER_COLORS.medium} label="medium" />
+            <Legend color={TIER_COLORS.large} label="large" />
+            <span className="opacity-30">|</span>
+            <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded border border-dashed border-slate-500"></span>spinning up</span>
+          </div>
+        </section>
+
+        <section className="lg:col-span-5 grid grid-cols-2 gap-3 content-start">
+          <StatCard label="Episode step" value={`${s.step ?? 0} / ${s.episode_length ?? 288}`} />
+          <StatCard label="Incoming traffic" value={(s.request_rate ?? 0).toFixed(1)} unit="req/s" accent="#5B7FDE" />
+          <StatCard label="Latency" value={Math.round(s.latency_ms ?? 0)} unit="ms" accent={s.slo_violation ? "#FF5A5F" : undefined} />
+          <StatCard label="Active pods" value={`${s.active_pods ?? 0} / ${s.max_pods ?? 15}`} />
+          <StatCard label="Episode cost" value={`$${(s.episode_cost_total ?? 0).toFixed(1)}`} />
+          <StatCard label="SLO status" value={s.slo_violation ? "VIOLATION" : "OK"} accent={s.slo_violation ? "#FF5A5F" : "#35D0BA"} highlight={s.slo_violation} />
+        </section>
+
+        <section className="lg:col-span-7 glass rounded-2xl p-5">
+          <h2 className="font-semibold mb-3">Traffic &amp; Latency</h2>
+          <canvas ref={tlChartRef} height="90"></canvas>
+        </section>
+
+        <section className="lg:col-span-5 glass rounded-2xl p-5">
+          <div className="flex justify-between items-center mb-3">
+            <h2 className="font-semibold">Agent decision log</h2>
+            <span className="text-[10px] text-slate-500 font-mono">persisted to dashboard/backend/logs/*.jsonl</span>
+          </div>
+          <LogFeed logs={logs} />
+        </section>
+
+        <section className="lg:col-span-12 glass rounded-2xl p-5">
+          <h2 className="font-semibold mb-1">Train the RL agent</h2>
+          <p className="text-xs text-slate-400 mb-4">Runs PPO training in the background — this is your machine's actual training loop.</p>
+          <div className="flex flex-wrap items-end gap-4 mb-4">
+            <Field label="Timesteps">
+              <select value={timesteps} onChange={e => setTimesteps(parseInt(e.target.value))} className="bg-[#121A2B] border border-white/10 rounded-lg px-3 py-1.5 text-xs font-mono">
+                <option value={5000}>5,000 (smoke test, ~1 min)</option>
+                <option value={50000}>50,000 (~2 min)</option>
+                <option value={200000}>200,000 (full run, ~8 min)</option>
+              </select>
+            </Field>
+            <button onClick={startTraining} disabled={training.running} className="px-4 py-2 rounded-lg bg-teal-500 text-[#08201C] font-semibold text-sm disabled:opacity-30">Start training</button>
+            <button onClick={stopTraining} disabled={!training.running} className="px-4 py-2 rounded-lg border border-red-500/50 text-red-400 text-sm disabled:opacity-30">Stop</button>
+            <div className="flex-1 min-w-[220px] flex items-center gap-3">
+              <div className="flex-1 h-2 bg-white/5 rounded-full overflow-hidden">
+                <div className="h-full bg-gradient-to-r from-violet-400 to-teal-400" style={{ width: `${Math.min(100, 100 * training.timesteps_done / (training.total_timesteps || 1))}%` }}></div>
+              </div>
+              <span className="text-[11px] font-mono text-slate-400 whitespace-nowrap">
+                {training.running ? `${training.timesteps_done.toLocaleString()} / ${training.total_timesteps.toLocaleString()} — reward ${training.latest_reward !== null ? training.latest_reward.toFixed(1) : "…"}`
+                  : training.error ? `error: ${training.error}` : "idle"}
+              </span>
+            </div>
+          </div>
+          <canvas ref={rewardChartRef} height="70"></canvas>
+        </section>
+
+      </main>
+
+      <PodModal pod={selectedPod} tierInfo={tierInfo} onClose={() => setSelectedPod(null)} />
+    </div>
+  );
+}
+
+function Field({ label, children }) {
+  return (
+    <label className="flex flex-col gap-1 text-[10px] uppercase tracking-wide text-slate-400">
+      <span>{label}</span>
+      {children}
+    </label>
+  );
+}
+
+function Legend({ color, label }) {
+  return <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded" style={{ background: color }}></span>{label}</span>;
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+</script>
+</body>
+</html>
