@@ -6,6 +6,18 @@ Reinforcement-learning-based pod autoscaling for a simulated Kubernetes cluster,
 
 This implements the paper's core idea — an RL agent jointly performing horizontal and vertical pod scaling to minimize SLO violations and cost — in a custom simulated environment, with a queuing-theoretic latency model rather than a real EKS cluster. See [`MDP_SPECIFICATION.md`](MDP_SPECIFICATION.md) for the full formal writeup, including a documented debugging history (reward hacking, tier-oscillation, and a known cluster-wide-tier limitation) worth reading if you want to understand *why* things are built the way they are, not just *what* they are.
 
+**Repository:** https://github.com/Sharvin-1816/kubernetes-autoscaler
+
+## My contribution
+
+The paper's idea is joint horizontal + vertical scaling by an RL agent. This project adds:
+
+1. **Queuing-based cluster simulator** — M/M/c-style latency `base / (1 - rho)^2`, 2-step pod spin-up delay, and a fixed per-pod overhead that makes the medium tier the cheapest per unit of capacity. Fully reproducible, no real cluster needed.
+2. **Asymmetric stabilization windows inside the MDP** — tier changes gated both ways, scale-down gated, scale-up never gated (like Kubernetes HPA/VPA), with both cooldown timers in the state so it stays Markov. This removed tier flapping near traffic peaks; a first single shared cooldown made ramp/spike worse, hence the asymmetric design.
+3. **Evidence-based reward-hacking fix** — `agents/diagnose.py` splits the reward into SLO/cost/churn parts; it showed the agent had learned to max out pods. Capping the SLO penalty at 3.0 and weighting cost at 0.6 fixed it.
+4. **Generalization protocol** — train on `diurnal` + `noisy_steady` only; evaluate on held-out `spike`, `ramp`, `mixed`.
+5. **Live dashboard on real data** — streams simulator state, logs every decision, controls real PPO training, and shows the benchmark results and generated figures.
+
 ## Architecture
 
 ![Architecture diagram](architecture-diagram.svg)
@@ -96,13 +108,28 @@ python -m dashboard.backend.server
 - **Baseline:** a threshold-based scaler mimicking real Kubernetes HPA (reacts to average CPU over a rolling window).
 - **Generalization test:** the agent trains only on `diurnal` and `noisy_steady` traffic patterns; `spike`, `ramp`, and `mixed` are held out entirely for evaluation.
 
+## Dashboard
+
+Three tabs at http://localhost:8000: **Live Simulation** (hex-pod cluster view, traffic/latency chart, decision log, SLO-compliance gauge, tier-time donut, reward breakdown, cumulative reward), **Benchmark Results** (PPO vs HPA charts, full table and the generated PNGs from `results/`), and **Train** (real PPO training with a live reward curve).
+
 ## Results (locked final model)
 
-PPO beats the HPA baseline on SLO violation rate across every pattern tested, both seen and unseen during training — at a real cost premium, consistent with how the reward function is weighted (reliability prioritized over cost). Full numbers in `results/final_summary_table.csv` and `results/final_improvement_summary.png` after running `final_analysis.py`.
+PPO has fewer SLO violations than the HPA baseline on every pattern, seen and unseen (10 episodes per pattern, 150 ms latency target):
+
+| Pattern | Seen in training | HPA SLO viol. | PPO SLO viol. | PPO cost vs HPA |
+|---|---|---|---|---|
+| diurnal | yes | 47.2% | 16.7% | +24.4% |
+| noisy_steady | yes | 78.5% | 9.0% | +50.4% |
+| spike | no | 55.8% | 24.4% | +2.2% |
+| ramp | no | 97.9% | 80.5% | +7.0% |
+| mixed | no | 53.1% | 44.2% | -3.5% |
+
+The cost premium follows from the reward weighting (reliability prioritized over cost). Raw numbers: `results/comparison_table.csv`, `results/final_summary_table.csv`, `results/final_improvement_summary.png`.
 
 ## Known limitations (documented, not hidden)
 
 - **Cluster-wide tier, not per-pod:** all pods share one tier at a time. This makes the trained policy strongly favor horizontal-only scaling, since committing the whole cluster to a higher tier for a temporary peak is rarely worth it. A genuinely per-pod tier model would be a real architecture change, not a quick fix.
+- **Held-out weak spots:** on `ramp` and `mixed`, traffic approaches the 15-pod ceiling, queuing latency blows up near saturation, and the agent stays on the small tier. PPO's p95 latency on held-out patterns is also higher than HPA's.
 - **Cumulative cost metric:** the dashboard's "Episode cost" stat is a running total (always increasing by design), not a live rate — see the per-step `cost` field in the decision log for the fluctuating value.
 - **Synthetic traffic, not live data:** traffic is generated from parameterized formulas (sine waves, Gaussian bumps, linear ramps), not pulled from a real service. This is a standard, disclosed simplification given no real cluster is available — see MDP_SPECIFICATION.md for the full reasoning.
 
