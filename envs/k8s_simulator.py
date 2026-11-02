@@ -106,14 +106,15 @@ class KubernetesSimulator:
         return self.state
 
     def _advance_pending_pods(self):
-        """Move pending pods closer to activation; activate any that are ready."""
+        """Move pending pods closer to activation; activate when delay expires."""
         still_pending = []
+
         for count, steps_left in self.state.pending_pods:
-            steps_left -= 1
-            if steps_left <= 0:
+            if steps_left <= 1:
                 self.state.active_pods += count
             else:
-                still_pending.append((count, steps_left))
+                still_pending.append((count, steps_left - 1))
+
         self.state.pending_pods = still_pending
 
     def apply_action(self, horizontal_delta: int, tier: PodTier):
@@ -197,12 +198,17 @@ class KubernetesSimulator:
 if __name__ == "__main__":
     # Quick sanity check: fixed pod count, ramp up traffic, watch latency curve
     import matplotlib.pyplot as plt
-    from workload_generator import WorkloadGenerator  # noqa
+    import os
+    from pathlib import Path
+    from utils.workload_generator import WorkloadGenerator  # noqa
 
     sim = KubernetesSimulator()
     sim.reset()
     sim.state.active_pods = 5
     sim.state.tier = PodTier.MEDIUM
+
+    output_path = Path("results/latency_curve_sanity_check.png")
+    output_path.parent.mkdir(parents=True, exist_ok=True)
 
     rates = np.linspace(5, 200, 100)
     latencies = []
@@ -218,5 +224,5 @@ if __name__ == "__main__":
     plt.title("Latency vs load, fixed at 5 MEDIUM pods (capacity=150 req/s)")
     plt.legend()
     plt.tight_layout()
-    plt.savefig("/home/claude/k8s-rl-autoscaler/results/latency_curve_sanity_check.png", dpi=120)
-    print("Saved sanity-check plot to results/latency_curve_sanity_check.png")
+    plt.savefig(output_path, dpi=120)
+    print(f"Saved sanity-check plot to {output_path}")

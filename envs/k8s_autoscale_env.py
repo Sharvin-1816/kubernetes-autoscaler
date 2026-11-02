@@ -224,11 +224,17 @@ class KubernetesAutoscalingEnv(gym.Env):
         result = self.sim.step(request_rate=request_rate, horizontal_delta=horizontal_delta, tier=tier)
 
         # --- reward computation ---
+        # --- SLO reward shaping ---
+        # Account for pods that are already pending and will become active.
+        # This prevents PPO from treating a valid scale-up action as completely
+        # ineffective during the pod spin-up transition.
+
+        # --- SLO penalty ---
         if result["slo_violation"]:
-            over_ratio = (result["latency_ms"] - LATENCY_TARGET_MS) / LATENCY_TARGET_MS
-            # capped at 3.0 (was 10.0) - a bad violation should hurt, but
-            # shouldn't be so catastrophic that "never risk it" dominates
-            # every other consideration regardless of cost
+            over_ratio = (
+                result["latency_ms"] - LATENCY_TARGET_MS
+            ) / LATENCY_TARGET_MS
+
             slo_penalty = np.clip(over_ratio, 0.0, 3.0)
         else:
             slo_penalty = 0.0
@@ -269,6 +275,8 @@ class KubernetesAutoscalingEnv(gym.Env):
         info["requested_tier"] = requested_tier
         info["tier_cooldown_remaining"] = self._tier_cooldown_remaining
         info["down_cooldown_remaining"] = self._down_cooldown_remaining
+        info["slo_penalty"] = slo_penalty
+        info["cost_penalty"] = cost_penalty
         self._history.append(info)
 
         if self.render_mode == "human":

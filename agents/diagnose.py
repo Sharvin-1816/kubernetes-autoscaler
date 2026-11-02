@@ -14,6 +14,12 @@ Usage (from project root, after training):
 import numpy as np
 from stable_baselines3 import PPO
 
+import os
+import sys
+
+# Ensure project root is in sys.path so envs can be imported regardless of execution method
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+
 from envs.k8s_autoscale_env import make_eval_env
 
 MODEL_PATH = "models/best_model/best_model.zip"
@@ -59,15 +65,66 @@ def run_and_diagnose(pattern: str, episode_length: int = 288, seed: int = 0):
     print(f"    -> If one action dominates >90% of steps, the agent has collapsed")
     print(f"       to a near-constant policy rather than a traffic-responsive one.")
 
-    # 2c. How often did the down-cooldown actually block a requested scale-down?
-    # (New check for the asymmetric stabilization window - confirms the
-    # mechanism is engaging without over-throttling.)
-    blocked_downs = sum(1 for h in history
-                         if h.get("requested_horizontal", 3) < 3 and h["horizontal_action"] == 3)
-    requested_downs = sum(1 for h in history if h.get("requested_horizontal", 3) < 3)
-    print(f"\n[2c] Scale-down requests blocked by cooldown: {blocked_downs} / {requested_downs} requested")
-    print(f"     -> Confirms the down-cooldown is engaging (blocks > 0) without")
-    print(f"        eliminating scale-up responsiveness (that's a separate, ungated path).")
+    # 2c. Requested vs actual actions.
+    # requested_* comes directly from the PPO output; *_action is what the
+    # environment actually applied after cooldown/stabilization constraints.
+    requested_h = [h.get("requested_horizontal", 3) for h in history]
+    actual_h = [h["horizontal_action"] for h in history]
+    requested_t = [h.get("requested_tier", h["tier_action"]) for h in history]
+    actual_t = [h["tier_action"] for h in history]
+
+    h_blocked = sum(r != a for r, a in zip(requested_h, actual_h))
+    t_blocked = sum(r != a for r, a in zip(requested_t, actual_t))
+
+    print("\n[2c] Requested vs actual actions:")
+    print(f"    Horizontal overrides : {h_blocked:3d} / {len(history)} "
+          f"({100*h_blocked/max(len(history),1):5.1f}%)")
+    print(f"    Tier overrides       : {t_blocked:3d} / {len(history)} "
+          f"({100*t_blocked/max(len(history),1):5.1f}%)")
+
+    # Requested/actual horizontal distribution.
+    req_h_counts = {a: requested_h.count(a) for a in range(7)}
+    act_h_counts = {a: actual_h.count(a) for a in range(7)}
+    print("    Horizontal requested -> " +
+          "  ".join(f"{horiz_labels[a]}:{req_h_counts[a]:3d}" for a in range(7)))
+    print("    Horizontal actual    -> " +
+          "  ".join(f"{horiz_labels[a]}:{act_h_counts[a]:3d}" for a in range(7)))
+
+    # Requested/actual tier distribution.
+    req_t_counts = {t: requested_t.count(t) for t in [0, 1, 2]}
+    act_t_counts = {t: actual_t.count(t) for t in [0, 1, 2]}
+    print(f"    Tier requested -> small: {req_t_counts[0]:3d}  medium: {req_t_counts[1]:3d}  large: {req_t_counts[2]:3d}")
+    print(f"    Tier actual    -> small: {act_t_counts[0]:3d}  medium: {act_t_counts[1]:3d}  large: {act_t_counts[2]:3d}")
+
+    # Scale-down cooldown specifically.
+    blocked_downs = sum(
+        1 for h in history
+        if h.get("requested_horizontal", 3) < 3 and h["horizontal_action"] == 3
+    )
+    requested_downs = sum(
+        1 for h in history if h.get("requested_horizontal", 3) < 3
+    )
+    print(f"    Scale-down cooldown blocks: {blocked_downs} / {requested_downs} requested")
+
+    # 2d. What happens to SLO immediately after an applied scaling action?
+    scaling_events = []
+    for i, h in enumerate(history):
+        if h["horizontal_action"] != 3 or (
+            i > 0 and h["tier_action"] != history[i - 1]["tier_action"]
+        ):
+            before_slo = history[i - 1]["latency_ms"] if i > 0 else h["latency_ms"]
+            after_slo = h["latency_ms"]
+            scaling_events.append((before_slo, after_slo, h.get("reward", 0.0)))
+
+    print("\n[2d] Scaling-event response:")
+    if scaling_events:
+        improved = sum(after < before for before, after, _ in scaling_events)
+        avg_delta = np.mean([after - before for before, after, _ in scaling_events])
+        print(f"    Scaling events         : {len(scaling_events)}")
+        print(f"    Improved latency       : {improved}/{len(scaling_events)}")
+        print(f"    Mean immediate latency change: {avg_delta:+.2f} ms")
+    else:
+        print("    No scaling events detected.")
 
     # 2b. Timing of tier switches relative to peak traffic - are switches
     # clustered right at the peak (potential cause of latency oscillation)?

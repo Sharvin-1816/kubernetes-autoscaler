@@ -1,420 +1,918 @@
 <!DOCTYPE html>
 <html lang="en" class="dark">
+
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Autoscaler Control Room — K8s RL Simulation</title>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AutoScaleRL — Control Room</title>
 
-<script src="https://cdn.tailwindcss.com"></script>
-<script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
-<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
-<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
-<script>
-  tailwind.config = {
-    darkMode: 'class',
-    theme: { extend: { fontFamily: {
-      sans: ['Space Grotesk', 'sans-serif'],
-      mono: ['IBM Plex Mono', 'monospace'],
-    } } }
-  }
-</script>
-<style>
-  @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
-  body {
-    background: #060913;
-    background-image: radial-gradient(at 20% 10%, rgba(53,208,186,0.06) 0px, transparent 50%),
-                       radial-gradient(at 80% 80%, rgba(139,124,246,0.05) 0px, transparent 50%);
-    background-attachment: fixed;
-  }
-  .glass { background: rgba(15,23,42,0.7); backdrop-filter: blur(10px); border: 1px solid rgba(255,255,255,0.06); }
-  .hex-pod { transition: transform .2s, filter .2s; cursor: pointer; }
-  .hex-pod:hover { transform: translateY(-2px); filter: drop-shadow(0 0 10px rgba(53,208,186,0.4)); }
-  .pending-pulse { animation: pendingPulse 1.4s ease-in-out infinite; }
-  @keyframes pendingPulse { 0%,100% { opacity: .35 } 50% { opacity: .9 } }
-  ::-webkit-scrollbar { width: 6px; height: 6px; }
-  ::-webkit-scrollbar-thumb { background: #1f2a44; border-radius: 4px; }
-</style>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Space Grotesk', 'sans-serif'],
+            mono: ['IBM Plex Mono', 'monospace'],
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
+
+    body {
+      background: #060913;
+      background-image: radial-gradient(at 20% 10%, rgba(53, 208, 186, 0.07) 0px, transparent 50%),
+        radial-gradient(at 80% 80%, rgba(139, 124, 246, 0.06) 0px, transparent 50%),
+        radial-gradient(at 50% 100%, rgba(91, 127, 222, 0.05) 0px, transparent 60%);
+      background-attachment: fixed;
+    }
+
+    .glass {
+      background: rgba(15, 23, 42, 0.68);
+      backdrop-filter: blur(12px);
+      border: 1px solid rgba(255, 255, 255, 0.07);
+    }
+
+    .glass-strong {
+      background: rgba(15, 23, 42, 0.85);
+      backdrop-filter: blur(16px);
+      border: 1px solid rgba(255, 255, 255, 0.09);
+    }
+
+    .hex-pod {
+      transition: transform .2s, filter .2s;
+      cursor: pointer;
+    }
+
+    .hex-pod:hover {
+      transform: translateY(-2px);
+      filter: drop-shadow(0 0 10px rgba(53, 208, 186, 0.4));
+    }
+
+    .pending-pulse {
+      animation: pendingPulse 1.4s ease-in-out infinite;
+    }
+
+    @keyframes pendingPulse {
+
+      0%,
+      100% {
+        opacity: .35
+      }
+
+      50% {
+        opacity: .9
+      }
+    }
+
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+
+    ::-webkit-scrollbar-thumb {
+      background: #1f2a44;
+      border-radius: 4px;
+    }
+
+    .tab-btn {
+      position: relative;
+      transition: color .15s;
+    }
+
+    .tab-btn.active {
+      color: #35D0BA;
+    }
+
+    .tab-btn.active::after {
+      content: '';
+      position: absolute;
+      left: 0;
+      right: 0;
+      bottom: -13px;
+      height: 2px;
+      background: linear-gradient(90deg, #35D0BA, #8B7CF6);
+      border-radius: 2px;
+    }
+
+    .glow-teal {
+      text-shadow: 0 0 14px rgba(53, 208, 186, .5);
+    }
+
+    .section-title {
+      letter-spacing: .02em;
+    }
+
+    .fade-in {
+      animation: fadeIn .4s ease;
+    }
+
+    @keyframes fadeIn {
+      from {
+        opacity: 0;
+        transform: translateY(4px);
+      }
+
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+  </style>
 </head>
+
 <body class="min-h-screen text-slate-100 font-sans">
-<div id="root"></div>
+  <div id="root"></div>
 
-<script type="text/babel">
-const { useState, useEffect, useRef, useCallback } = React;
+  <script type="text/babel">
+    const { useState, useEffect, useRef, useCallback, useMemo } = React;
 
-const TIER_COLORS = { small: "#35D0BA", medium: "#5B7FDE", large: "#8B7CF6" };
-const TIER_NAMES = ["small", "medium", "large"];
+    const TIER_COLORS = { small: "#35D0BA", medium: "#5B7FDE", large: "#8B7CF6" };
+    const TIER_NAMES = ["small", "medium", "large"];
+    const PALETTE = { teal: "#35D0BA", violet: "#8B7CF6", blue: "#5B7FDE", red: "#FF5A5F", amber: "#F5A623", slate: "#7C8AA5" };
+    const AXIS_OPTS = { ticks: { color: "#7C8AA5", font: { size: 10 } }, grid: { color: "#1F2A44" } };
+    const LEGEND_OPTS = { labels: { color: "#E6EDF5", font: { size: 11 } } };
 
-function HexPod({ pod, onClick }) {
-  const isPending = pod.status === "pending";
-  const color = TIER_COLORS[pod.tier] || TIER_COLORS.small;
-  const util = pod.cpu_util || 0;
-  const violated = util > 1.0;
-  const warn = util > 0.75;
-  const width = pod.tier === "large" ? 118 : pod.tier === "medium" ? 102 : 90;
+    function HexPod({ pod, onClick }) {
+      const isPending = pod.status === "pending";
+      const color = TIER_COLORS[pod.tier] || TIER_COLORS.small;
+      const util = pod.cpu_util || 0;
+      const violated = util > 1.0;
+      const warn = util > 0.75;
+      const width = pod.tier === "large" ? 118 : pod.tier === "medium" ? 102 : 90;
 
-  let strokeColor = color;
-  if (!isPending) {
-    if (violated) strokeColor = "#FF5A5F";
-    else if (warn) strokeColor = "#F5A623";
-  }
+      let strokeColor = color;
+      if (!isPending) {
+        if (violated) strokeColor = "#FF5A5F";
+        else if (warn) strokeColor = "#F5A623";
+      }
 
-  return (
-    <div className="hex-pod flex flex-col items-center" onClick={onClick} title={pod.id}>
-      <svg width={width} height={width * 1.1} viewBox="0 0 84 92">
-        <polygon points="42,2 80,23 80,69 42,90 4,69 4,23"
-          fill={strokeColor} fillOpacity={isPending ? 0.06 : 0.16}
-          stroke={strokeColor} strokeWidth="2.5"
-          strokeDasharray={isPending ? "5 4" : "none"}
-          className={isPending ? "pending-pulse" : ""} />
-        {!isPending && (
-          <g textAnchor="middle" fontFamily="IBM Plex Mono">
-            <text x="42" y="38" fill="#F1F5F9" fontSize="13" fontWeight="700">{pod.id}</text>
-            <text x="42" y="56" fill="#94A3B8" fontSize="12">{Math.round(util * 100)}%</text>
-          </g>
-        )}
-      </svg>
-      <div
-        className="-mt-3 rounded-b-md flex items-center justify-center gap-1.5 py-1.5 text-[10px] font-mono text-slate-300"
-        style={{ background: `${strokeColor}22`, borderTop: `1px solid ${strokeColor}55`, width }}
-      >
-        <span className="w-1.5 h-1.5 rounded-full" style={{ background: strokeColor }}></span>
-        {pod.tier}
-      </div>
-    </div>
-  );
-}
-
-function PodModal({ pod, tierInfo, onClose }) {
-  if (!pod) return null;
-  const info = tierInfo[pod.tier] || {};
-  return (
-    <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4" onClick={onClose}>
-      <div className="glass rounded-2xl max-w-sm w-full p-6" onClick={(e) => e.stopPropagation()}>
-        <div className="flex justify-between items-start mb-4">
-          <div>
-            <h3 className="font-mono text-lg font-semibold">{pod.id}</h3>
-            <span className={`text-xs font-mono uppercase ${pod.status === "active" ? "text-teal-400" : "text-amber-400"}`}>
-              {pod.status}
-            </span>
+      return (
+        <div className="hex-pod flex flex-col items-center" onClick={onClick} title={pod.id}>
+          <svg width={width} height={width * 1.1} viewBox="0 0 84 92">
+            <polygon points="42,2 80,23 80,69 42,90 4,69 4,23"
+              fill={strokeColor} fillOpacity={isPending ? 0.06 : 0.16}
+              stroke={strokeColor} strokeWidth="2.5"
+              strokeDasharray={isPending ? "5 4" : "none"}
+              className={isPending ? "pending-pulse" : ""} />
+            {!isPending && (
+              <g textAnchor="middle" fontFamily="IBM Plex Mono">
+                <text x="42" y="38" fill="#F1F5F9" fontSize="13" fontWeight="700">{pod.id}</text>
+                <text x="42" y="56" fill="#94A3B8" fontSize="12">{Math.round(util * 100)}%</text>
+              </g>
+            )}
+          </svg>
+          <div
+            className="-mt-3 rounded-b-md flex items-center justify-center gap-1.5 py-1.5 text-[10px] font-mono text-slate-300"
+            style={{ background: `${strokeColor}22`, borderTop: `1px solid ${strokeColor}55`, width }}
+          >
+            <span className="w-1.5 h-1.5 rounded-full" style={{ background: strokeColor }}></span>
+            {pod.tier}
           </div>
-          <button onClick={onClose} className="text-slate-400 hover:text-white text-xl leading-none">&times;</button>
         </div>
-        <div className="space-y-2 font-mono text-sm">
-          <Row label="Tier" value={pod.tier} />
-          <Row label="Capacity" value={`${info.capacity ?? "—"} req/s`} />
-          <Row label="Cost / step" value={`$${info.cost_per_step ?? "—"}`} />
-          <Row label="Age" value={`${pod.age_steps} steps`} />
-          <Row label="Cluster CPU util" value={`${Math.round((pod.cpu_util||0)*100)}%`} />
+      );
+    }
+
+    function PodModal({ pod, tierInfo, onClose }) {
+      if (!pod) return null;
+      const info = tierInfo[pod.tier] || {};
+      return (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4" onClick={onClose}>
+          <div className="glass-strong rounded-2xl max-w-sm w-full p-6" onClick={(e) => e.stopPropagation()}>
+            <div className="flex justify-between items-start mb-4">
+              <div>
+                <h3 className="font-mono text-lg font-semibold">{pod.id}</h3>
+                <span className={`text-xs font-mono uppercase ${pod.status === "active" ? "text-teal-400" : "text-amber-400"}`}>
+                  {pod.status}
+                </span>
+              </div>
+              <button onClick={onClose} className="text-slate-400 hover:text-white text-xl leading-none">&times;</button>
+            </div>
+            <div className="space-y-2 font-mono text-sm">
+              <Row label="Tier" value={pod.tier} />
+              <Row label="Capacity" value={`${info.capacity ?? "—"} req/s`} />
+              <Row label="Cost / step" value={`$${info.cost_per_step ?? "—"}`} />
+              <Row label="Age" value={`${pod.age_steps} steps`} />
+              <Row label="Cluster CPU util" value={`${Math.round((pod.cpu_util || 0) * 100)}%`} />
+            </div>
+            <p className="text-[11px] text-slate-500 mt-4 leading-relaxed">
+              CPU utilization reflects the whole cluster's current load — this simulation
+              models capacity uniformly across pods of a tier rather than per-pod
+              load-balancing variance, so every pod in the cluster shows the same value.
+            </p>
+          </div>
         </div>
-        <p className="text-[11px] text-slate-500 mt-4 leading-relaxed">
-          CPU utilization reflects the whole cluster's current load — this simulation
-          models capacity uniformly across pods of a tier rather than per-pod
-          load-balancing variance, so every pod in the cluster shows the same value.
-        </p>
-      </div>
-    </div>
-  );
-}
+      );
+    }
 
-function Row({ label, value }) {
-  return (
-    <div className="flex justify-between border-b border-white/5 py-1.5">
-      <span className="text-slate-400">{label}</span>
-      <span className="text-slate-100 capitalize">{value}</span>
-    </div>
-  );
-}
-
-function StatCard({ label, value, unit, accent, highlight }) {
-  return (
-    <div className={`glass rounded-xl p-3.5 flex flex-col gap-1 ${highlight ? "border-red-500/50 bg-red-950/20" : ""}`}>
-      <span className="text-[10px] uppercase tracking-wide text-slate-400">{label}</span>
-      <span className="font-mono text-xl font-medium" style={accent ? { color: accent } : {}}>
-        {value}{unit && <small className="text-slate-500 text-xs ml-1">{unit}</small>}
-      </span>
-    </div>
-  );
-}
-
-function LogFeed({ logs }) {
-  const reversed = [...logs].reverse();
-  return (
-    <div className="space-y-1.5 max-h-[340px] overflow-y-auto pr-1">
-      {reversed.length === 0 && <div className="text-xs text-slate-500 font-mono">No decisions yet — press play.</div>}
-      {reversed.map((log, i) => (
-        <div key={i} className={`rounded-lg px-3 py-2 text-[11px] font-mono border ${
-          log.slo_violation ? "border-red-500/30 bg-red-950/20 text-red-300"
-          : log.blocked ? "border-amber-500/30 bg-amber-950/10 text-amber-300"
-          : "border-white/5 bg-white/[0.02] text-slate-300"
-        }`}>
-          <span className="text-slate-500 mr-2">S{log.step}</span>{log.message}
+    function Row({ label, value }) {
+      return (
+        <div className="flex justify-between border-b border-white/5 py-1.5">
+          <span className="text-slate-400">{label}</span>
+          <span className="text-slate-100 capitalize">{value}</span>
         </div>
-      ))}
-    </div>
-  );
-}
+      );
+    }
 
-function App() {
-  const [patterns, setPatterns] = useState({ train: [], eval_only: [] });
-  const [pattern, setPattern] = useState("spike");
-  const [agent, setAgent] = useState("hpa");
-  const [speed, setSpeed] = useState(2.0);
-  const [state, setState] = useState(null);
-  const [tierInfo, setTierInfo] = useState({});
-  const [selectedPod, setSelectedPod] = useState(null);
-  const [training, setTraining] = useState({ running: false, timesteps_done: 0, total_timesteps: 200000, latest_reward: null, reward_history: [], error: null });
-  const [timesteps, setTimesteps] = useState(200000);
+    function StatCard({ label, value, unit, accent, highlight, sub }) {
+      return (
+        <div className={`glass rounded-xl p-3.5 flex flex-col gap-1 ${highlight ? "border-red-500/50 bg-red-950/20" : ""}`}>
+          <span className="text-[10px] uppercase tracking-wide text-slate-400">{label}</span>
+          <span className="font-mono text-xl font-medium" style={accent ? { color: accent } : {}}>
+            {value}{unit && <small className="text-slate-500 text-xs ml-1">{unit}</small>}
+          </span>
+          {sub && <span className="text-[10px] text-slate-500">{sub}</span>}
+        </div>
+      );
+    }
 
-  const wsRef = useRef(null);
-  const lastStepRef = useRef(-1);
-  const tlChartRef = useRef(null);
-  const tlChartInstance = useRef(null);
-  const rewardChartRef = useRef(null);
-  const rewardChartInstance = useRef(null);
-  const historyRef = useRef({ labels: [], traffic: [], latency: [] });
+    function LogFeed({ logs }) {
+      const reversed = [...logs].reverse();
+      return (
+        <div className="space-y-1.5 max-h-[340px] overflow-y-auto pr-1">
+          {reversed.length === 0 && <div className="text-xs text-slate-500 font-mono">No decisions yet — press play.</div>}
+          {reversed.map((log, i) => (
+            <div key={i} className={`rounded-lg px-3 py-2 text-[11px] font-mono border ${log.slo_violation ? "border-red-500/30 bg-red-950/20 text-red-300"
+                : log.blocked ? "border-amber-500/30 bg-amber-950/10 text-amber-300"
+                  : "border-white/5 bg-white/[0.02] text-slate-300"
+              }`}>
+              <span className="text-slate-500 mr-2">S{log.step}</span>{log.message}
+            </div>
+          ))}
+        </div>
+      );
+    }
 
-  useEffect(() => {
-    fetch("/api/patterns").then(r => r.json()).then(d =>
-      setPatterns({ train: d.train_patterns, eval_only: d.eval_only_patterns }));
-    fetch("/api/tier_info").then(r => r.json()).then(setTierInfo);
-  }, []);
+    function SectionHeader({ title, subtitle, right }) {
+      return (
+        <div className="flex justify-between items-start mb-3 flex-wrap gap-2">
+          <div>
+            <h2 className="font-semibold section-title">{title}</h2>
+            {subtitle && <p className="text-[11px] text-slate-500 mt-0.5">{subtitle}</p>}
+          </div>
+          {right}
+        </div>
+      );
+    }
 
-  useEffect(() => {
-    function connect() {
-      const ws = new WebSocket(`ws://${location.host}/ws/simulation`);
-      ws.onmessage = (evt) => {
-        const s = JSON.parse(evt.data);
-        if (s.step < lastStepRef.current) {
-          historyRef.current = { labels: [], traffic: [], latency: [] };
+    // --- Small canvas-chart wrapper components (each owns one Chart.js instance) ---
+    function useChart(buildConfig, deps) {
+      const canvasRef = useRef(null);
+      const chartRef = useRef(null);
+      useEffect(() => {
+        const ctx = canvasRef.current.getContext("2d");
+        chartRef.current = new Chart(ctx, buildConfig());
+        return () => chartRef.current && chartRef.current.destroy();
+        // eslint-disable-next-line
+      }, []);
+      useEffect(() => {
+        if (!chartRef.current) return;
+        const cfg = buildConfig();
+        chartRef.current.data = cfg.data;
+        chartRef.current.options = cfg.options;
+        chartRef.current.update("none");
+        // eslint-disable-next-line
+      }, deps);
+      return canvasRef;
+    }
+
+    function DoughnutGauge({ pct, color, label }) {
+      const ref = useChart(() => ({
+        type: "doughnut",
+        data: { datasets: [{ data: [pct, 100 - pct], backgroundColor: [color, "#1b2436"], borderWidth: 0 }] },
+        options: { cutout: "76%", plugins: { legend: { display: false }, tooltip: { enabled: false } }, animation: false },
+      }), [pct, color]);
+      return (
+        <div className="relative w-full flex flex-col items-center">
+          <div className="relative w-28 h-28">
+            <canvas ref={ref}></canvas>
+            <div className="absolute inset-0 flex flex-col items-center justify-center">
+              <span className="font-mono text-xl font-semibold" style={{ color }}>{pct.toFixed(0)}%</span>
+            </div>
+          </div>
+          <span className="text-[11px] text-slate-400 mt-1">{label}</span>
+        </div>
+      );
+    }
+
+    function TierDonut({ tierSteps }) {
+      const total = Object.values(tierSteps).reduce((a, b) => a + b, 0) || 1;
+      const ref = useChart(() => ({
+        type: "doughnut",
+        data: {
+          labels: TIER_NAMES,
+          datasets: [{
+            data: TIER_NAMES.map(t => tierSteps[t] || 0),
+            backgroundColor: TIER_NAMES.map(t => TIER_COLORS[t]),
+            borderColor: "#0b0f1c", borderWidth: 2,
+          }],
+        },
+        options: { cutout: "58%", animation: false, plugins: { legend: { position: "bottom", labels: { color: "#C7D2E0", font: { size: 10 }, boxWidth: 10 } } } },
+      }), [JSON.stringify(tierSteps)]);
+      return (
+        <div className="h-[170px] flex items-center justify-center">
+          <canvas ref={ref}></canvas>
+        </div>
+      );
+    }
+
+    function RewardBreakdownBar({ components }) {
+      const ref = useChart(() => ({
+        type: "bar",
+        data: {
+          labels: ["SLO", "Cost", "Churn"],
+          datasets: [{
+            data: [components.slo || 0, components.cost || 0, components.churn || 0],
+            backgroundColor: [PALETTE.red, PALETTE.blue, PALETTE.amber],
+            borderRadius: 4,
+          }],
+        },
+        options: {
+          indexAxis: "y", animation: false,
+          scales: { x: AXIS_OPTS, y: { ticks: { color: "#C7D2E0", font: { size: 11 } }, grid: { display: false } } },
+          plugins: { legend: { display: false } },
+        },
+      }), [JSON.stringify(components)]);
+      return <div className="h-[130px]"><canvas ref={ref}></canvas></div>;
+    }
+
+    function CumulativeRewardLine({ history }) {
+      const ref = useChart(() => ({
+        type: "line",
+        data: {
+          labels: history.map(p => p.step),
+          datasets: [{ data: history.map(p => p.reward), borderColor: PALETTE.violet, backgroundColor: "rgba(139,124,246,0.08)", tension: .2, pointRadius: 0, borderWidth: 2, fill: true }],
+        },
+        options: { animation: false, scales: { x: AXIS_OPTS, y: AXIS_OPTS }, plugins: { legend: { display: false } } },
+      }), [history.length, history.length ? history[history.length - 1].reward : 0]);
+      return <div className="h-[120px]"><canvas ref={ref}></canvas></div>;
+    }
+
+    function GroupedBarChart({ labels, series, yLabel, formatSuffix }) {
+      const ref = useChart(() => ({
+        type: "bar",
+        data: {
+          labels,
+          datasets: series.map(s => ({ label: s.label, data: s.data, backgroundColor: s.color, borderRadius: 4 })),
+        },
+        options: {
+          animation: false,
+          scales: {
+            x: { ticks: { color: "#C7D2E0", font: { size: 10 } }, grid: { display: false } },
+            y: { ...AXIS_OPTS, title: { display: !!yLabel, text: yLabel, color: "#94A3B8", font: { size: 10 } } },
+          },
+          plugins: { legend: LEGEND_OPTS },
+        },
+      }), [JSON.stringify(labels), JSON.stringify(series)]);
+      return <div className="h-[260px]"><canvas ref={ref}></canvas></div>;
+    }
+
+    function ImprovementBars({ improvements }) {
+      const labels = improvements.map(i => i.pattern);
+      const ref = useChart(() => ({
+        type: "bar",
+        data: {
+          labels,
+          datasets: [{
+            label: "SLO violation reduction (%)",
+            data: improvements.map(i => i.slo_improvement_pct),
+            backgroundColor: improvements.map(i => (i.slo_improvement_pct ?? 0) >= 0 ? PALETTE.teal : PALETTE.red),
+            borderRadius: 4,
+          }],
+        },
+        options: {
+          animation: false,
+          scales: { x: { ticks: { color: "#C7D2E0", font: { size: 10 } }, grid: { display: false } }, y: AXIS_OPTS },
+          plugins: { legend: { display: false } },
+        },
+      }), [JSON.stringify(improvements)]);
+      return <div className="h-[220px]"><canvas ref={ref}></canvas></div>;
+    }
+
+    // ---------------------------------------------------------------------------
+    // Results tab — real, pre-computed benchmark numbers from results/*.csv
+    // ---------------------------------------------------------------------------
+    function ResultsTab() {
+      const [data, setData] = useState(null);
+      const [images, setImages] = useState([]);
+      const [lightbox, setLightbox] = useState(null);
+
+      useEffect(() => {
+        fetch("/api/results/summary").then(r => r.json()).then(setData);
+        fetch("/api/results/images").then(r => r.json()).then(d => setImages(d.images || []));
+      }, []);
+
+      if (!data) return <div className="text-sm text-slate-400 p-6">Loading benchmark results…</div>;
+      if (!data.available) {
+        return (
+          <div className="glass rounded-2xl p-8 text-center text-slate-400">
+            No results found. Run <code className="font-mono text-teal-400">python -m agents.evaluate</code> first.
+          </div>
+        );
+      }
+
+      const patternOrder = ["diurnal", "noisy_steady", "spike", "ramp", "mixed"];
+      const patterns = [...data.patterns].sort((a, b) => patternOrder.indexOf(a.pattern) - patternOrder.indexOf(b.pattern));
+      const labels = patterns.map(p => `${p.pattern}${p.seen_during_training ? "" : " ★"}`);
+
+      const avgSloImprovement = data.improvements.length
+        ? (data.improvements.reduce((s, i) => s + (i.slo_improvement_pct || 0), 0) / data.improvements.length)
+        : 0;
+      const heldOut = data.improvements.filter(i => !i.seen_during_training);
+      const avgSloImprovementHeldOut = heldOut.length
+        ? (heldOut.reduce((s, i) => s + (i.slo_improvement_pct || 0), 0) / heldOut.length)
+        : 0;
+
+      return (
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 fade-in">
+          <section className="lg:col-span-12 glass-strong rounded-2xl p-6">
+            <SectionHeader
+              title="PPO vs. HPA Baseline — benchmark results"
+              subtitle="Averaged over 10 episodes per pattern/agent · from the locked model's evaluation run · ★ = held-out pattern (never seen during training)"
+            />
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-2">
+              <StatCard label="Avg SLO violation reduction" value={`${avgSloImprovement.toFixed(0)}%`} accent={PALETTE.teal} sub="across all 5 patterns" />
+              <StatCard label="Held-out pattern improvement" value={`${avgSloImprovementHeldOut.toFixed(0)}%`} accent={PALETTE.violet} sub="spike, ramp, mixed (unseen)" />
+              <StatCard label="Patterns evaluated" value={patterns.length} sub="5 traffic shapes" />
+              <StatCard label="Episodes per pattern" value="10" sub="per agent, per pattern" />
+            </div>
+          </section>
+
+          {images.length > 0 && (
+            <section className="lg:col-span-12 glass rounded-2xl p-5">
+              <SectionHeader title="Generated result figures" subtitle="the exact PNGs produced by agents/evaluate.py and agents/final_analysis.py — click to enlarge" />
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 mt-2">
+                {images.map(img => (
+                  <button key={img.file} onClick={() => setLightbox(img)} className="text-left rounded-xl overflow-hidden border border-white/10 bg-black/20 hover:border-teal-400/40 transition-colors">
+                    <img src={img.url} alt={img.title} className="w-full h-40 object-contain bg-[#0b0f1c]" />
+                    <div className="p-3">
+                      <div className="text-sm font-medium text-slate-100">{img.title}</div>
+                      <div className="text-[11px] text-slate-500 mt-1 leading-snug">{img.caption}</div>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </section>
+          )}
+
+          <section className="lg:col-span-6 glass rounded-2xl p-5">
+            <SectionHeader title="SLO violation % — lower is better" />
+            <GroupedBarChart
+              labels={labels}
+              series={[
+                { label: "HPA Baseline", data: patterns.map(p => p.hpa?.avg_slo_violation_pct ?? 0), color: PALETTE.slate },
+                { label: "PPO (RL)", data: patterns.map(p => p.ppo?.avg_slo_violation_pct ?? 0), color: PALETTE.teal },
+              ]}
+              yLabel="% of steps over 150ms SLO"
+            />
+          </section>
+
+          <section className="lg:col-span-6 glass rounded-2xl p-5">
+            <SectionHeader title="Average episode cost — reliability has a cost premium" />
+            <GroupedBarChart
+              labels={labels}
+              series={[
+                { label: "HPA Baseline", data: patterns.map(p => p.hpa?.avg_cost ?? 0), color: PALETTE.slate },
+                { label: "PPO (RL)", data: patterns.map(p => p.ppo?.avg_cost ?? 0), color: PALETTE.violet },
+              ]}
+              yLabel="$ per episode"
+            />
+          </section>
+
+          <section className="lg:col-span-6 glass rounded-2xl p-5">
+            <SectionHeader title="p95 latency (ms)" subtitle="tail latency during transients — PPO trades some tail latency for far fewer SLO breaches on average" />
+            <GroupedBarChart
+              labels={labels}
+              series={[
+                { label: "HPA Baseline", data: patterns.map(p => p.hpa?.avg_p95_latency_ms ?? 0), color: PALETTE.slate },
+                { label: "PPO (RL)", data: patterns.map(p => p.ppo?.avg_p95_latency_ms ?? 0), color: PALETTE.red },
+              ]}
+              yLabel="ms"
+            />
+          </section>
+
+          <section className="lg:col-span-6 glass rounded-2xl p-5">
+            <SectionHeader title="SLO-violation reduction by pattern" subtitle="PPO vs HPA, % reduction (positive = PPO is better)" />
+            <ImprovementBars improvements={patterns.map(p => data.improvements.find(i => i.pattern === p.pattern) || { pattern: p.pattern, slo_improvement_pct: 0 })} />
+          </section>
+
+          <section className="lg:col-span-12 glass rounded-2xl p-5 overflow-x-auto">
+            <SectionHeader title="Full numbers" subtitle="straight from results/comparison_table.csv — exactly what agents/evaluate.py produced" />
+            <table className="w-full text-xs font-mono mt-2">
+              <thead>
+                <tr className="text-slate-400 border-b border-white/10">
+                  <th className="text-left py-2 pr-4">Pattern</th>
+                  <th className="text-left py-2 pr-4">Agent</th>
+                  <th className="text-right py-2 pr-4">Avg cost</th>
+                  <th className="text-right py-2 pr-4">SLO viol. %</th>
+                  <th className="text-right py-2 pr-4">Avg latency</th>
+                  <th className="text-right py-2 pr-4">p95 latency</th>
+                  <th className="text-right py-2">Scale events</th>
+                </tr>
+              </thead>
+              <tbody>
+                {patterns.flatMap(p => [
+                  <tr key={p.pattern + "-hpa"} className="border-b border-white/5 text-slate-300">
+                    <td className="py-1.5 pr-4">{p.pattern}{!p.seen_during_training && <span className="text-amber-400"> ★</span>}</td>
+                    <td className="py-1.5 pr-4 text-slate-400">HPA Baseline</td>
+                    <td className="py-1.5 pr-4 text-right">${p.hpa?.avg_cost}</td>
+                    <td className="py-1.5 pr-4 text-right">{p.hpa?.avg_slo_violation_pct}%</td>
+                    <td className="py-1.5 pr-4 text-right">{p.hpa?.avg_latency_ms}ms</td>
+                    <td className="py-1.5 pr-4 text-right">{p.hpa?.avg_p95_latency_ms}ms</td>
+                    <td className="py-1.5 text-right">{p.hpa?.avg_scale_events}</td>
+                  </tr>,
+                  <tr key={p.pattern + "-ppo"} className="border-b border-white/10 text-teal-300">
+                    <td className="py-1.5 pr-4"></td>
+                    <td className="py-1.5 pr-4 font-semibold">PPO (RL)</td>
+                    <td className="py-1.5 pr-4 text-right">${p.ppo?.avg_cost}</td>
+                    <td className="py-1.5 pr-4 text-right">{p.ppo?.avg_slo_violation_pct}%</td>
+                    <td className="py-1.5 pr-4 text-right">{p.ppo?.avg_latency_ms}ms</td>
+                    <td className="py-1.5 pr-4 text-right">{p.ppo?.avg_p95_latency_ms}ms</td>
+                    <td className="py-1.5 text-right">{p.ppo?.avg_scale_events}</td>
+                  </tr>,
+                ])}
+              </tbody>
+            </table>
+            <p className="text-[11px] text-slate-500 mt-3">★ held-out pattern — never seen during training, tests generalization.</p>
+          </section>
+
+          {!data.ablation_available && (
+            <section className="lg:col-span-12 glass rounded-xl p-4 text-xs text-slate-500 border-dashed border border-white/10">
+              Reward-ablation comparison (slo_only / balanced / cost_priority) not yet run — once <code className="font-mono text-slate-400">agents/evaluate_ablation.py</code> produces <code className="font-mono text-slate-400">results/ablation_comparison.csv</code>, this section will render automatically.
+            </section>
+          )}
+
+          {lightbox && (
+            <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-6" onClick={() => setLightbox(null)}>
+              <div className="max-w-4xl w-full" onClick={(e) => e.stopPropagation()}>
+                <div className="flex justify-between items-center mb-2">
+                  <h3 className="font-semibold">{lightbox.title}</h3>
+                  <button onClick={() => setLightbox(null)} className="text-slate-400 hover:text-white text-2xl leading-none">&times;</button>
+                </div>
+                <img src={lightbox.url} alt={lightbox.title} className="w-full rounded-xl border border-white/10 bg-[#0b0f1c]" />
+                <p className="text-xs text-slate-400 mt-2">{lightbox.caption}</p>
+              </div>
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    function App() {
+      const [tab, setTab] = useState("live");
+      const [patterns, setPatterns] = useState({ train: [], eval_only: [] });
+      const [pattern, setPattern] = useState("spike");
+      const [agent, setAgent] = useState("hpa");
+      const [speed, setSpeed] = useState(2.0);
+      const [state, setState] = useState(null);
+      const [tierInfo, setTierInfo] = useState({});
+      const [selectedPod, setSelectedPod] = useState(null);
+      const [training, setTraining] = useState({ running: false, timesteps_done: 0, total_timesteps: 200000, latest_reward: null, reward_history: [], error: null });
+      const [timesteps, setTimesteps] = useState(200000);
+
+      const wsRef = useRef(null);
+      const lastStepRef = useRef(-1);
+      const tlChartRef = useRef(null);
+      const tlChartInstance = useRef(null);
+      const rewardChartRef = useRef(null);
+      const rewardChartInstance = useRef(null);
+      const historyRef = useRef({ labels: [], traffic: [], latency: [] });
+
+      useEffect(() => {
+        fetch("/api/patterns").then(r => r.json()).then(d =>
+          setPatterns({ train: d.train_patterns, eval_only: d.eval_only_patterns }));
+        fetch("/api/tier_info").then(r => r.json()).then(setTierInfo);
+      }, []);
+
+      useEffect(() => {
+        function connect() {
+          const ws = new WebSocket(`ws://${location.host}/ws/simulation`);
+          ws.onmessage = (evt) => {
+            const s = JSON.parse(evt.data);
+            if (s.step < lastStepRef.current) {
+              historyRef.current = { labels: [], traffic: [], latency: [] };
+            }
+            lastStepRef.current = s.step;
+            historyRef.current.labels.push(s.step);
+            historyRef.current.traffic.push(s.request_rate);
+            historyRef.current.latency.push(s.latency_ms);
+            if (historyRef.current.labels.length > 288) {
+              historyRef.current.labels.shift();
+              historyRef.current.traffic.shift();
+              historyRef.current.latency.shift();
+            }
+            setState(s);
+            if (tlChartInstance.current) {
+              tlChartInstance.current.data.labels = historyRef.current.labels;
+              tlChartInstance.current.data.datasets[0].data = historyRef.current.traffic;
+              tlChartInstance.current.data.datasets[1].data = historyRef.current.latency;
+              tlChartInstance.current.update("none");
+            }
+          };
+          ws.onclose = () => setTimeout(connect, 1500);
+          wsRef.current = ws;
         }
-        lastStepRef.current = s.step;
-        historyRef.current.labels.push(s.step);
-        historyRef.current.traffic.push(s.request_rate);
-        historyRef.current.latency.push(s.latency_ms);
-        if (historyRef.current.labels.length > 288) {
-          historyRef.current.labels.shift();
-          historyRef.current.traffic.shift();
-          historyRef.current.latency.shift();
+        connect();
+        return () => wsRef.current && wsRef.current.close();
+      }, []);
+
+      // Lazily (re-)create these two top-level charts. Their canvases only
+      // exist in the DOM while their tab is active, so creation has to be
+      // re-attempted whenever `tab` changes rather than once on mount -
+      // otherwise the Train tab's canvas is null the first time (and vice
+      // versa if someone starts on a different default tab).
+      useEffect(() => {
+        // If a canvas's tab isn't active, React already unmounted that <canvas>
+        // node, leaving our Chart instance pointing at a detached element.
+        // Destroy it so the next visit to that tab creates a fresh one against
+        // the new canvas node, instead of silently failing or erroring.
+        if (!tlChartRef.current && tlChartInstance.current) {
+          tlChartInstance.current.destroy();
+          tlChartInstance.current = null;
         }
-        setState(s);
-        if (tlChartInstance.current) {
+        if (!rewardChartRef.current && rewardChartInstance.current) {
+          rewardChartInstance.current.destroy();
+          rewardChartInstance.current = null;
+        }
+
+        if (tlChartRef.current && !tlChartInstance.current) {
+          const ctx = tlChartRef.current.getContext("2d");
+          tlChartInstance.current = new Chart(ctx, {
+            type: "line",
+            data: {
+              labels: [], datasets: [
+                { label: "Traffic (req/s)", data: [], borderColor: "#5B7FDE", backgroundColor: "rgba(91,127,222,0.08)", yAxisID: "y", tension: .25, pointRadius: 0, borderWidth: 2 },
+                { label: "Latency (ms)", data: [], borderColor: "#FF5A5F", backgroundColor: "rgba(255,90,95,0.08)", yAxisID: "y1", tension: .25, pointRadius: 0, borderWidth: 2 },
+              ]
+            },
+            options: {
+              responsive: true, animation: false, interaction: { mode: "index", intersect: false },
+              scales: {
+                x: { ticks: { color: "#7C8AA5", font: { size: 10 } }, grid: { color: "#1F2A44" } },
+                y: { position: "left", ticks: { color: "#7C8AA5", font: { size: 10 } }, grid: { color: "#1F2A44" } },
+                y1: { position: "right", ticks: { color: "#7C8AA5", font: { size: 10 } }, grid: { display: false } },
+              },
+              plugins: { legend: { labels: { color: "#E6EDF5", font: { size: 11 } } } }
+            }
+          });
+          // backfill with whatever history we already have (e.g. switched
+          // away from "live" and back - the websocket kept streaming)
           tlChartInstance.current.data.labels = historyRef.current.labels;
           tlChartInstance.current.data.datasets[0].data = historyRef.current.traffic;
           tlChartInstance.current.data.datasets[1].data = historyRef.current.latency;
           tlChartInstance.current.update("none");
         }
+
+        if (rewardChartRef.current && !rewardChartInstance.current) {
+          const rctx = rewardChartRef.current.getContext("2d");
+          rewardChartInstance.current = new Chart(rctx, {
+            type: "line",
+            data: {
+              labels: [], datasets: [
+                { label: "Mean episode reward", data: [], borderColor: "#8B7CF6", backgroundColor: "rgba(139,124,246,0.08)", tension: .2, pointRadius: 0, borderWidth: 2 },
+              ]
+            },
+            options: {
+              responsive: true, animation: false,
+              scales: {
+                x: { ticks: { color: "#7C8AA5", font: { size: 10 } }, grid: { color: "#1F2A44" } },
+                y: { ticks: { color: "#7C8AA5", font: { size: 10 } }, grid: { color: "#1F2A44" } },
+              },
+              plugins: { legend: { labels: { color: "#E6EDF5", font: { size: 11 } } } }
+            }
+          });
+          rewardChartInstance.current.data.labels = training.reward_history.map(p => p.timestep);
+          rewardChartInstance.current.data.datasets[0].data = training.reward_history.map(p => p.reward);
+          rewardChartInstance.current.update("none");
+        }
+      }, [tab]);
+
+      useEffect(() => {
+        const interval = setInterval(async () => {
+          const res = await fetch("/api/training/status");
+          const d = await res.json();
+          setTraining(d);
+          if (rewardChartInstance.current) {
+            rewardChartInstance.current.data.labels = d.reward_history.map(p => p.timestep);
+            rewardChartInstance.current.data.datasets[0].data = d.reward_history.map(p => p.reward);
+            rewardChartInstance.current.update("none");
+          }
+        }, 1000);
+        return () => clearInterval(interval);
+      }, []);
+
+      const applyConfig = useCallback(async (nextPattern, nextAgent) => {
+        const res = await fetch("/api/simulation/config", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ pattern: nextPattern, agent: nextAgent }),
+        });
+        const d = await res.json();
+        if (d.status === "error") { alert(d.message); setAgent("hpa"); }
+      }, []);
+
+      useEffect(() => { applyConfig(pattern, agent); }, [pattern, agent]);
+
+      const control = (action) => fetch("/api/simulation/control", {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action }),
+      });
+
+      const setSpeedRemote = (v) => {
+        setSpeed(v);
+        fetch("/api/simulation/speed", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ speed: v }) });
       };
-      ws.onclose = () => setTimeout(connect, 1500);
-      wsRef.current = ws;
-    }
-    connect();
-    return () => wsRef.current && wsRef.current.close();
-  }, []);
 
-  useEffect(() => {
-    const ctx = tlChartRef.current.getContext("2d");
-    tlChartInstance.current = new Chart(ctx, {
-      type: "line",
-      data: { labels: [], datasets: [
-        { label: "Traffic (req/s)", data: [], borderColor: "#5B7FDE", backgroundColor: "rgba(91,127,222,0.08)", yAxisID: "y", tension: .25, pointRadius: 0, borderWidth: 2 },
-        { label: "Latency (ms)", data: [], borderColor: "#FF5A5F", backgroundColor: "rgba(255,90,95,0.08)", yAxisID: "y1", tension: .25, pointRadius: 0, borderWidth: 2 },
-      ]},
-      options: { responsive: true, animation: false, interaction: { mode: "index", intersect: false },
-        scales: {
-          x: { ticks: { color: "#7C8AA5", font: { size: 10 } }, grid: { color: "#1F2A44" } },
-          y: { position: "left", ticks: { color: "#7C8AA5", font: { size: 10 } }, grid: { color: "#1F2A44" } },
-          y1: { position: "right", ticks: { color: "#7C8AA5", font: { size: 10 } }, grid: { display: false } },
-        },
-        plugins: { legend: { labels: { color: "#E6EDF5", font: { size: 11 } } } } }
-    });
+      const startTraining = async () => {
+        await fetch("/api/training/start", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ total_timesteps: timesteps }) });
+      };
+      const stopTraining = () => fetch("/api/training/stop", { method: "POST" });
 
-    const rctx = rewardChartRef.current.getContext("2d");
-    rewardChartInstance.current = new Chart(rctx, {
-      type: "line",
-      data: { labels: [], datasets: [
-        { label: "Mean episode reward", data: [], borderColor: "#8B7CF6", backgroundColor: "rgba(139,124,246,0.08)", tension: .2, pointRadius: 0, borderWidth: 2 },
-      ]},
-      options: { responsive: true, animation: false,
-        scales: {
-          x: { ticks: { color: "#7C8AA5", font: { size: 10 } }, grid: { color: "#1F2A44" } },
-          y: { ticks: { color: "#7C8AA5", font: { size: 10 } }, grid: { color: "#1F2A44" } },
-        },
-        plugins: { legend: { labels: { color: "#E6EDF5", font: { size: 11 } } } } }
-    });
-  }, []);
+      const s = state || {};
+      const pods = s.pods || [];
+      const logs = s.recent_logs || [];
+      const tierSteps = s.tier_steps || { small: 0, medium: 0, large: 0 };
+      const rewardComponentsTotal = s.reward_components_total || { slo: 0, cost: 0, churn: 0 };
+      const cumulativeRewardHistory = s.cumulative_reward_history || [];
+      const sloCompliance = s.slo_compliance_pct ?? 100;
 
-  useEffect(() => {
-    const interval = setInterval(async () => {
-      const res = await fetch("/api/training/status");
-      const d = await res.json();
-      setTraining(d);
-      if (rewardChartInstance.current) {
-        rewardChartInstance.current.data.labels = d.reward_history.map(p => p.timestep);
-        rewardChartInstance.current.data.datasets[0].data = d.reward_history.map(p => p.reward);
-        rewardChartInstance.current.update("none");
-      }
-    }, 1000);
-    return () => clearInterval(interval);
-  }, []);
-
-  const applyConfig = useCallback(async (nextPattern, nextAgent) => {
-    const res = await fetch("/api/simulation/config", {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ pattern: nextPattern, agent: nextAgent }),
-    });
-    const d = await res.json();
-    if (d.status === "error") { alert(d.message); setAgent("hpa"); }
-  }, []);
-
-  useEffect(() => { applyConfig(pattern, agent); }, [pattern, agent]);
-
-  const control = (action) => fetch("/api/simulation/control", {
-    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action }),
-  });
-
-  const setSpeedRemote = (v) => {
-    setSpeed(v);
-    fetch("/api/simulation/speed", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ speed: v }) });
-  };
-
-  const startTraining = async () => {
-    await fetch("/api/training/start", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ total_timesteps: timesteps }) });
-  };
-  const stopTraining = () => fetch("/api/training/stop", { method: "POST" });
-
-  const s = state || {};
-  const pods = s.pods || [];
-  const logs = s.recent_logs || [];
-
-  return (
-    <div className="min-h-screen flex flex-col">
-      <header className="border-b border-white/5 bg-[#080d1a]/90 backdrop-blur-md sticky top-0 z-30 px-6 py-3.5">
-        <div className="max-w-[1500px] mx-auto flex flex-wrap items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <span className="text-2xl text-teal-400" style={{ textShadow: "0 0 14px rgba(53,208,186,.5)" }}>⬡</span>
-            <div>
-              <h1 className="font-semibold text-lg">Autoscaler Control Room</h1>
-              <p className="text-xs text-slate-400">RL-based Kubernetes pod autoscaling — live simulation</p>
-            </div>
-          </div>
-          <div className="flex flex-wrap items-end gap-4">
-            <Field label="Traffic pattern">
-              <select value={pattern} onChange={e => setPattern(e.target.value)} className="bg-[#121A2B] border border-white/10 rounded-lg px-3 py-1.5 text-xs font-mono">
-                {patterns.train.map(p => <option key={p} value={p}>{p} (seen)</option>)}
-                {patterns.eval_only.map(p => <option key={p} value={p}>{p} (unseen)</option>)}
-              </select>
-            </Field>
-            <Field label="Agent">
-              <select value={agent} onChange={e => setAgent(e.target.value)} className="bg-[#121A2B] border border-white/10 rounded-lg px-3 py-1.5 text-xs font-mono">
-                <option value="hpa">HPA Baseline</option>
-                <option value="ppo">PPO (RL)</option>
-              </select>
-            </Field>
-            <div className="flex gap-1.5 bg-[#121A2B] border border-white/10 rounded-lg p-1">
-              <button onClick={() => control("play")} disabled={s.playing} className="w-8 h-8 rounded bg-teal-500 text-[#08201C] font-bold disabled:opacity-30">▶</button>
-              <button onClick={() => control("pause")} disabled={!s.playing} className="w-8 h-8 rounded hover:bg-white/5 disabled:opacity-30">⏸</button>
-              <button onClick={() => control("step")} className="w-8 h-8 rounded hover:bg-white/5">⏭</button>
-              <button onClick={() => control("reset")} className="w-8 h-8 rounded hover:bg-white/5">↺</button>
-            </div>
-            <Field label={`Speed ${speed.toFixed(1)}x`}>
-              <input type="range" min="0.5" max="10" step="0.5" value={speed} onChange={e => setSpeedRemote(parseFloat(e.target.value))} className="w-28" />
-            </Field>
-          </div>
-        </div>
-      </header>
-
-      <main className="max-w-[1500px] w-full mx-auto p-6 grid grid-cols-1 lg:grid-cols-12 gap-5">
-
-        <section className="lg:col-span-7 glass rounded-2xl p-5">
-          <div className="flex justify-between items-baseline mb-3">
-            <h2 className="font-semibold">Cluster</h2>
-            <span className="text-xs text-slate-400 font-mono">
-              {s.active_pods ?? 0} active · {s.pending_pods ?? 0} spinning up · tier: {TIER_NAMES[s.tier ?? 1]}
-            </span>
-          </div>
-          <div className="min-h-[200px] flex flex-wrap gap-3 items-center py-4">
-            {pods.map(p => <HexPod key={p.id} pod={p} onClick={() => setSelectedPod(p)} />)}
-          </div>
-          <div className="flex gap-4 text-[11px] text-slate-400 font-mono pt-3 border-t border-white/5">
-            <Legend color={TIER_COLORS.small} label="small" />
-            <Legend color={TIER_COLORS.medium} label="medium" />
-            <Legend color={TIER_COLORS.large} label="large" />
-            <span className="opacity-30">|</span>
-            <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded border border-dashed border-slate-500"></span>spinning up</span>
-          </div>
-        </section>
-
-        <section className="lg:col-span-5 grid grid-cols-2 gap-3 content-start">
-          <StatCard label="Episode step" value={`${s.step ?? 0} / ${s.episode_length ?? 288}`} />
-          <StatCard label="Incoming traffic" value={(s.request_rate ?? 0).toFixed(1)} unit="req/s" accent="#5B7FDE" />
-          <StatCard label="Latency" value={Math.round(s.latency_ms ?? 0)} unit="ms" accent={s.slo_violation ? "#FF5A5F" : undefined} />
-          <StatCard label="Active pods" value={`${s.active_pods ?? 0} / ${s.max_pods ?? 15}`} />
-          <StatCard label="Episode cost" value={`$${(s.episode_cost_total ?? 0).toFixed(1)}`} />
-          <StatCard label="SLO status" value={s.slo_violation ? "VIOLATION" : "OK"} accent={s.slo_violation ? "#FF5A5F" : "#35D0BA"} highlight={s.slo_violation} />
-        </section>
-
-        <section className="lg:col-span-7 glass rounded-2xl p-5">
-          <h2 className="font-semibold mb-3">Traffic &amp; Latency</h2>
-          <canvas ref={tlChartRef} height="90"></canvas>
-        </section>
-
-        <section className="lg:col-span-5 glass rounded-2xl p-5">
-          <div className="flex justify-between items-center mb-3">
-            <h2 className="font-semibold">Agent decision log</h2>
-            <span className="text-[10px] text-slate-500 font-mono">persisted to dashboard/backend/logs/*.jsonl</span>
-          </div>
-          <LogFeed logs={logs} />
-        </section>
-
-        <section className="lg:col-span-12 glass rounded-2xl p-5">
-          <h2 className="font-semibold mb-1">Train the RL agent</h2>
-          <p className="text-xs text-slate-400 mb-4">Runs PPO training in the background — this is your machine's actual training loop.</p>
-          <div className="flex flex-wrap items-end gap-4 mb-4">
-            <Field label="Timesteps">
-              <select value={timesteps} onChange={e => setTimesteps(parseInt(e.target.value))} className="bg-[#121A2B] border border-white/10 rounded-lg px-3 py-1.5 text-xs font-mono">
-                <option value={5000}>5,000 (smoke test, ~1 min)</option>
-                <option value={50000}>50,000 (~2 min)</option>
-                <option value={200000}>200,000 (full run, ~8 min)</option>
-              </select>
-            </Field>
-            <button onClick={startTraining} disabled={training.running} className="px-4 py-2 rounded-lg bg-teal-500 text-[#08201C] font-semibold text-sm disabled:opacity-30">Start training</button>
-            <button onClick={stopTraining} disabled={!training.running} className="px-4 py-2 rounded-lg border border-red-500/50 text-red-400 text-sm disabled:opacity-30">Stop</button>
-            <div className="flex-1 min-w-[220px] flex items-center gap-3">
-              <div className="flex-1 h-2 bg-white/5 rounded-full overflow-hidden">
-                <div className="h-full bg-gradient-to-r from-violet-400 to-teal-400" style={{ width: `${Math.min(100, 100 * training.timesteps_done / (training.total_timesteps || 1))}%` }}></div>
+      return (
+        <div className="min-h-screen flex flex-col">
+          <header className="border-b border-white/5 bg-[#080d1a]/90 backdrop-blur-md sticky top-0 z-30 px-6 py-3.5">
+            <div className="max-w-[1500px] mx-auto flex flex-wrap items-center justify-between gap-4">
+              <div className="flex items-center gap-3">
+                <span className="text-2xl text-teal-400 glow-teal">⬡</span>
+                <div>
+                  <h1 className="font-semibold text-lg">AutoScaleRL</h1>
+                  <p className="text-xs text-slate-400">RL-based Kubernetes pod autoscaling — simulated control room</p>
+                </div>
               </div>
-              <span className="text-[11px] font-mono text-slate-400 whitespace-nowrap">
-                {training.running ? `${training.timesteps_done.toLocaleString()} / ${training.total_timesteps.toLocaleString()} — reward ${training.latest_reward !== null ? training.latest_reward.toFixed(1) : "…"}`
-                  : training.error ? `error: ${training.error}` : "idle"}
-              </span>
+
+              <nav className="flex gap-6 text-sm font-medium text-slate-400">
+                <button className={`tab-btn ${tab === "live" ? "active" : ""}`} onClick={() => setTab("live")}>Live Simulation</button>
+                <button className={`tab-btn ${tab === "results" ? "active" : ""}`} onClick={() => setTab("results")}>Benchmark Results</button>
+                <button className={`tab-btn ${tab === "train" ? "active" : ""}`} onClick={() => setTab("train")}>Train</button>
+              </nav>
+
+              {tab === "live" && (
+                <div className="flex flex-wrap items-end gap-4">
+                  <Field label="Traffic pattern">
+                    <select value={pattern} onChange={e => setPattern(e.target.value)} className="bg-[#121A2B] border border-white/10 rounded-lg px-3 py-1.5 text-xs font-mono">
+                      {patterns.train.map(p => <option key={p} value={p}>{p} (seen)</option>)}
+                      {patterns.eval_only.map(p => <option key={p} value={p}>{p} (unseen)</option>)}
+                    </select>
+                  </Field>
+                  <Field label="Agent">
+                    <select value={agent} onChange={e => setAgent(e.target.value)} className="bg-[#121A2B] border border-white/10 rounded-lg px-3 py-1.5 text-xs font-mono">
+                      <option value="hpa">HPA Baseline</option>
+                      <option value="ppo">PPO (RL)</option>
+                    </select>
+                  </Field>
+                  <div className="flex gap-1.5 bg-[#121A2B] border border-white/10 rounded-lg p-1">
+                    <button onClick={() => control("play")} disabled={s.playing} className="w-8 h-8 rounded bg-teal-500 text-[#08201C] font-bold disabled:opacity-30">▶</button>
+                    <button onClick={() => control("pause")} disabled={!s.playing} className="w-8 h-8 rounded hover:bg-white/5 disabled:opacity-30">⏸</button>
+                    <button onClick={() => control("step")} className="w-8 h-8 rounded hover:bg-white/5">⏭</button>
+                    <button onClick={() => control("reset")} className="w-8 h-8 rounded hover:bg-white/5">↺</button>
+                  </div>
+                  <Field label={`Speed ${speed.toFixed(1)}x`}>
+                    <input type="range" min="0.5" max="10" step="0.5" value={speed} onChange={e => setSpeedRemote(parseFloat(e.target.value))} className="w-28" />
+                  </Field>
+                </div>
+              )}
             </div>
-          </div>
-          <canvas ref={rewardChartRef} height="70"></canvas>
-        </section>
+          </header>
 
-      </main>
+          <main className="max-w-[1500px] w-full mx-auto p-6">
+            {tab === "live" && (
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 fade-in">
 
-      <PodModal pod={selectedPod} tierInfo={tierInfo} onClose={() => setSelectedPod(null)} />
-    </div>
-  );
-}
+                <section className="lg:col-span-7 glass rounded-2xl p-5">
+                  <SectionHeader
+                    title="Cluster"
+                    right={<span className="text-xs text-slate-400 font-mono">
+                      {s.active_pods ?? 0} active · {s.pending_pods ?? 0} spinning up · tier: {TIER_NAMES[s.tier ?? 1]}
+                    </span>}
+                  />
+                  <div className="min-h-[200px] flex flex-wrap gap-3 items-center py-4">
+                    {pods.map(p => <HexPod key={p.id} pod={p} onClick={() => setSelectedPod(p)} />)}
+                  </div>
+                  <div className="flex gap-4 text-[11px] text-slate-400 font-mono pt-3 border-t border-white/5">
+                    <Legend color={TIER_COLORS.small} label="small" />
+                    <Legend color={TIER_COLORS.medium} label="medium" />
+                    <Legend color={TIER_COLORS.large} label="large" />
+                    <span className="opacity-30">|</span>
+                    <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded border border-dashed border-slate-500"></span>spinning up</span>
+                  </div>
+                </section>
 
-function Field({ label, children }) {
-  return (
-    <label className="flex flex-col gap-1 text-[10px] uppercase tracking-wide text-slate-400">
-      <span>{label}</span>
-      {children}
-    </label>
-  );
-}
+                <section className="lg:col-span-5 grid grid-cols-2 gap-3 content-start">
+                  <StatCard label="Episode step" value={`${s.step ?? 0} / ${s.episode_length ?? 288}`} />
+                  <StatCard label="Incoming traffic" value={(s.request_rate ?? 0).toFixed(1)} unit="req/s" accent="#5B7FDE" />
+                  <StatCard label="Latency" value={Math.round(s.latency_ms ?? 0)} unit="ms" accent={s.slo_violation ? "#FF5A5F" : undefined} />
+                  <StatCard label="Active pods" value={`${s.active_pods ?? 0} / ${s.max_pods ?? 15}`} />
+                  <StatCard label="Episode cost" value={`$${(s.episode_cost_total ?? 0).toFixed(1)}`} />
+                  <StatCard label="SLO status" value={s.slo_violation ? "VIOLATION" : "OK"} accent={s.slo_violation ? "#FF5A5F" : "#35D0BA"} highlight={s.slo_violation} />
+                </section>
 
-function Legend({ color, label }) {
-  return <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded" style={{ background: color }}></span>{label}</span>;
-}
+                <section className="lg:col-span-7 glass rounded-2xl p-5">
+                  <SectionHeader title="Traffic &amp; Latency" subtitle="full 288-step episode history" />
+                  <canvas ref={tlChartRef} height="90"></canvas>
+                </section>
 
-ReactDOM.createRoot(document.getElementById("root")).render(<App />);
-</script>
+                <section className="lg:col-span-5 glass rounded-2xl p-5">
+                  <SectionHeader
+                    title="Agent decision log"
+                    right={<span className="text-[10px] text-slate-500 font-mono">logs/*.jsonl</span>}
+                  />
+                  <LogFeed logs={logs} />
+                </section>
+
+                <section className="lg:col-span-3 glass rounded-2xl p-5 flex flex-col items-center justify-center">
+                  <SectionHeader title="SLO compliance" subtitle="this episode" />
+                  <DoughnutGauge pct={sloCompliance} color={sloCompliance > 80 ? PALETTE.teal : sloCompliance > 50 ? PALETTE.amber : PALETTE.red} label={`${s.steps_taken ?? 0} steps observed`} />
+                </section>
+
+                <section className="lg:col-span-4 glass rounded-2xl p-5">
+                  <SectionHeader title="Tier-time distribution" subtitle="steps spent per pod tier" />
+                  <TierDonut tierSteps={tierSteps} />
+                </section>
+
+                <section className="lg:col-span-5 glass rounded-2xl p-5">
+                  <SectionHeader title="Reward component breakdown" subtitle="cumulative penalty by source, this episode" />
+                  <RewardBreakdownBar components={rewardComponentsTotal} />
+                  <div className="mt-2 text-[11px] font-mono text-slate-400 flex justify-between">
+                    <span>Total reward</span>
+                    <span className={s.reward_total < -100 ? "text-red-400" : "text-teal-400"}>{(s.reward_total ?? 0).toFixed(1)}</span>
+                  </div>
+                </section>
+
+                <section className="lg:col-span-12 glass rounded-2xl p-5">
+                  <SectionHeader title="Cumulative reward trajectory" subtitle="running total this episode — flattening slope means fewer new penalties" />
+                  <CumulativeRewardLine history={cumulativeRewardHistory} />
+                </section>
+
+              </div>
+            )}
+
+            {tab === "results" && <ResultsTab />}
+
+            {tab === "train" && (
+              <div className="grid grid-cols-1 gap-5 fade-in">
+                <section className="glass rounded-2xl p-5">
+                  <SectionHeader title="Train the RL agent" subtitle="Runs PPO training in the background — this is your machine's actual training loop." />
+                  <div className="flex flex-wrap items-end gap-4 mb-4">
+                    <Field label="Timesteps">
+                      <select value={timesteps} onChange={e => setTimesteps(parseInt(e.target.value))} className="bg-[#121A2B] border border-white/10 rounded-lg px-3 py-1.5 text-xs font-mono">
+                        <option value={5000}>5,000 (smoke test, ~1 min)</option>
+                        <option value={50000}>50,000 (~2 min)</option>
+                        <option value={200000}>200,000 (full run, ~8 min)</option>
+                      </select>
+                    </Field>
+                    <button onClick={startTraining} disabled={training.running} className="px-4 py-2 rounded-lg bg-teal-500 text-[#08201C] font-semibold text-sm disabled:opacity-30">Start training</button>
+                    <button onClick={stopTraining} disabled={!training.running} className="px-4 py-2 rounded-lg border border-red-500/50 text-red-400 text-sm disabled:opacity-30">Stop</button>
+                    <div className="flex-1 min-w-[220px] flex items-center gap-3">
+                      <div className="flex-1 h-2 bg-white/5 rounded-full overflow-hidden">
+                        <div className="h-full bg-gradient-to-r from-violet-400 to-teal-400" style={{ width: `${Math.min(100, 100 * training.timesteps_done / (training.total_timesteps || 1))}%` }}></div>
+                      </div>
+                      <span className="text-[11px] font-mono text-slate-400 whitespace-nowrap">
+                        {training.running ? `${training.timesteps_done.toLocaleString()} / ${training.total_timesteps.toLocaleString()} — reward ${training.latest_reward !== null ? training.latest_reward.toFixed(1) : "…"}`
+                          : training.error ? `error: ${training.error}` : "idle"}
+                      </span>
+                    </div>
+                  </div>
+                  <canvas ref={rewardChartRef} height="70"></canvas>
+                </section>
+              </div>
+            )}
+          </main>
+
+          <PodModal pod={selectedPod} tierInfo={tierInfo} onClose={() => setSelectedPod(null)} />
+        </div>
+      );
+    }
+
+    function Field({ label, children }) {
+      return (
+        <label className="flex flex-col gap-1 text-[10px] uppercase tracking-wide text-slate-400">
+          <span>{label}</span>
+          {children}
+        </label>
+      );
+    }
+
+    function Legend({ color, label }) {
+      return <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded" style={{ background: color }}></span>{label}</span>;
+    }
+
+    ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+  </script>
 </body>
+
 </html>

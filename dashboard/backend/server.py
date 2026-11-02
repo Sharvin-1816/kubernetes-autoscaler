@@ -13,6 +13,7 @@ Then open http://localhost:8000 in a browser.
 """
 import os
 import sys
+import csv
 import json
 import time
 import threading
@@ -77,6 +78,14 @@ class SimState:
         self.next_pod_id = 1
         self.decision_log = []  # capped list of real per-step decision entries
 
+        # --- Live analytics accumulators (real, reset every episode) ---
+        self.tier_steps = {"small": 0, "medium": 0, "large": 0}
+        self.slo_violations = 0
+        self.steps_taken = 0
+        self.reward_total = 0.0
+        self.reward_components_total = {"slo": 0.0, "cost": 0.0, "churn": 0.0}
+        self.cumulative_reward_history = []  # [{step, reward}] this episode
+
     def reset_env(self):
         self.env = make_eval_env(pattern=self.pattern, episode_length=288)
         self.obs, _ = self.env.reset()
@@ -94,6 +103,13 @@ class SimState:
             })
             self.next_pod_id += 1
         self.decision_log = []
+
+        self.tier_steps = {"small": 0, "medium": 0, "large": 0}
+        self.slo_violations = 0
+        self.steps_taken = 0
+        self.reward_total = 0.0
+        self.reward_components_total = {"slo": 0.0, "cost": 0.0, "churn": 0.0}
+        self.cumulative_reward_history = []
 
 
 sim = SimState()
@@ -205,6 +221,88 @@ def recent_logs():
     return {"log_file": str(LOG_FILE), "entries": sim.decision_log[-100:]}
 
 
+RESULTS_DIR = PROJECT_ROOT / "results"
+
+
+def _read_csv(path):
+    if not path.exists():
+        return []
+    with open(path, newline="") as f:
+        return list(csv.DictReader(f))
+
+
+@app.get("/api/results/summary")
+def results_summary():
+    """Real, pre-computed PPO-vs-baseline benchmark numbers from the locked
+    model's evaluation run (results/*.csv, committed to the repo - not
+    regenerated on the fly). This is what agents/evaluate.py and
+    agents/final_analysis.py produced; the dashboard just reads and charts it."""
+    comparison = _read_csv(RESULTS_DIR / "comparison_table.csv")
+    improvement = _read_csv(RESULTS_DIR / "final_summary_table.csv")
+    ablation = _read_csv(RESULTS_DIR / "ablation_comparison.csv")  # [] until ablation is run
+
+    def num(row, key):
+        try:
+            return round(float(row[key]), 2)
+        except (KeyError, ValueError, TypeError):
+            return None
+
+    patterns = {}
+    for row in comparison:
+        p = row["pattern"]
+        patterns.setdefault(p, {"pattern": p, "seen_during_training": row["seen_during_training"] == "True"})
+        agent_key = "ppo" if row["agent"] == "PPO" else "hpa"
+        patterns[p][agent_key] = {
+            "avg_cost": num(row, "avg_cost"),
+            "avg_slo_violation_pct": num(row, "avg_slo_violation_pct"),
+            "avg_latency_ms": num(row, "avg_latency_ms"),
+            "avg_p95_latency_ms": num(row, "avg_p95_latency_ms"),
+            "avg_scale_events": num(row, "avg_scale_events"),
+        }
+
+    improvements = [
+        {
+            "pattern": row["pattern"],
+            "seen_during_training": row["seen_during_training"] == "True",
+            "cost_improvement_pct": num(row, "cost_improvement_pct"),
+            "slo_improvement_pct": num(row, "slo_improvement_pct"),
+        }
+        for row in improvement
+    ]
+
+    return {
+        "available": len(comparison) > 0,
+        "patterns": list(patterns.values()),
+        "improvements": improvements,
+        "ablation_available": len(ablation) > 0,
+        "ablation": ablation,
+    }
+
+
+# Known result figures, in presentation order, with a caption each.
+# Only the ones that actually exist on disk are ever returned -
+# the frontend never has to guess a filename that isn't there.
+RESULT_FIGURES = [
+    {"file": "comparison_barplot.png", "title": "PPO vs. HPA — full comparison",
+     "caption": "avg_results.csv plotted directly by agents/evaluate.py: cost, SLO violation %, latency across all 5 patterns."},
+    {"file": "final_improvement_summary.png", "title": "Improvement summary",
+     "caption": "agents/final_analysis.py — % improvement of PPO over HPA baseline, per pattern."},
+    {"file": "episode_trace_spike.png", "title": "Episode trace — spike pattern",
+     "caption": "Step-by-step trace of one held-out spike episode: traffic, pod count, latency, tier."},
+    {"file": "ablation_tradeoff.png", "title": "Reward ablation — SLO vs. cost trade-off",
+     "caption": "slo_only / balanced / cost_priority reward variants, from agents/evaluate_ablation.py."},
+]
+
+
+@app.get("/api/results/images")
+def results_images():
+    out = []
+    for fig in RESULT_FIGURES:
+        if (RESULTS_DIR / fig["file"]).exists():
+            out.append({**fig, "url": f"/results-assets/{fig['file']}"})
+    return {"images": out}
+
+
 # ---------------------------------------------------------------------------
 # Stepping logic
 # ---------------------------------------------------------------------------
@@ -270,6 +368,19 @@ def _advance_one_step():
     sim.episode_cost_total += info.get("cost", 0.0)
 
     current_step = sim.env._step_idx
+
+    # --- live analytics bookkeeping (all real, derived from this real step) ---
+    sim.steps_taken += 1
+    if info.get("slo_violation"):
+        sim.slo_violations += 1
+    tier_name = TIER_NAMES[info.get("tier", 1)]
+    sim.tier_steps[tier_name] = sim.tier_steps.get(tier_name, 0) + 1
+    sim.reward_total += reward
+    sim.reward_components_total["slo"] += info.get("reward_slo_component", 0.0)
+    sim.reward_components_total["cost"] += info.get("reward_cost_component", 0.0)
+    sim.reward_components_total["churn"] += info.get("reward_churn_component", 0.0)
+    sim.cumulative_reward_history.append({"step": current_step, "reward": round(sim.reward_total, 2)})
+    sim.cumulative_reward_history = sim.cumulative_reward_history[-300:]
     new_total = info["active_pods"] + info["pending_pods"]
     _reconcile_pods(prev_total, info["active_pods"], info["pending_pods"], current_step)
 
@@ -334,6 +445,18 @@ def _current_state_payload():
         "cost": info.get("cost", 0),
         "episode_cost_total": sim.episode_cost_total,
         "max_pods": MAX_PODS,
+        "reward_step": info.get("reward", 0),
+        "reward_components": {
+            "slo": info.get("reward_slo_component", 0.0),
+            "cost": info.get("reward_cost_component", 0.0),
+            "churn": info.get("reward_churn_component", 0.0),
+        },
+        "reward_components_total": sim.reward_components_total,
+        "reward_total": round(sim.reward_total, 2),
+        "cumulative_reward_history": sim.cumulative_reward_history,
+        "tier_steps": sim.tier_steps,
+        "slo_compliance_pct": round(100.0 * (1 - sim.slo_violations / sim.steps_taken), 1) if sim.steps_taken else 100.0,
+        "steps_taken": sim.steps_taken,
         "pods": [
             {
                 "id": p["id"],
@@ -455,6 +578,9 @@ def _run_training():
 # ---------------------------------------------------------------------------
 # Serve frontend (must be mounted LAST - it's a catch-all)
 # ---------------------------------------------------------------------------
+if RESULTS_DIR.exists():
+    app.mount("/results-assets", StaticFiles(directory=str(RESULTS_DIR)), name="results-assets")
+
 app.mount("/", StaticFiles(directory=str(FRONTEND_DIR), html=True), name="frontend")
 
 
